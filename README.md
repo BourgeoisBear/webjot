@@ -10,29 +10,15 @@ Another static site generator, and an opinionated fork of https://github.com/zse
 
 ## Installation
 
-Download the binaries from Github or build it manually:
-
-	$ go get github.com/BourgeoisBear/zs
+`go install github.com/BourgeoisBear/zs@latest`
 
 ## Usage
 
-```
-Usage of zs:
-  -init
-        create a new site configuration inside the given directory
-  -ldelim string
-        left template delimiter (default "{{")
-  -port int
-        HTTP port for watch-mode web server (default 8080)
-  -rdelim string
-        right template delimiter (default "}}")
-  -vdelim string
-        vars/body delimiter (default "---")
-  -vshow
-        show per-page render vars on build
-  -watch
-        rebuild on file change
-```
+| Action                               | Command                        |
+| ------                               | -------                        |
+| create new site                      | `zs -init <new_site_path>`     |
+| re-build site                        | `zs <site_source_path>`        |
+| update site contents w/ live refresh | `zs -watch <site_source_path>` |
 
 Keep your texts in markdown or HTML format, right in the main directory of your blog/site.
 
@@ -59,7 +45,29 @@ Every variable from the content header will be passed via environment variables 
 * `$ZS_FILE` - a path to the currently processed markdown file
 * `$ZS_URL` - a URL for the currently generated page
 
-## Example of RSS generation
+**NOTE**: To ensure that live-refresh scripts are excluded from your final pages, be sure to re-build **without** the `-watch` flag prior to publication.
+
+## Flags
+
+```
+Usage of zs:
+  -init
+        create a new site configuration inside the given directory
+  -ldelim string
+        left template delimiter (default "{{")
+  -port int
+        HTTP port for watch-mode web server (default 8080)
+  -rdelim string
+        right template delimiter (default "}}")
+  -vdelim string
+        vars/body delimiter (default "---")
+  -vshow
+        show per-page render vars on build
+  -watch
+        rebuild on file change
+```
+
+## RSS Generation Example
 
 Extensions can be written in any language you know (Bash, Python, Lua, JavaScript, Go, even Assembler). Here's an example of how to scan all markdown blog posts and create RSS items:
 
@@ -82,11 +90,3 @@ for f in ./blog/*.md ; do
 	fi
 done | sort -r -n | cut -d' ' -f2-
 ```
-
-## Command line usage
-
-| Action                               | Command                      |
-| ------                               | -------                      |
-| create new site                      | zs -init <new_site_path>     |
-| re-build site                        | zs <site_source_path>        |
-| update site contents w/ live refresh | zs -watch <site_source_path> |
