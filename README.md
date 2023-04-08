@@ -66,7 +66,7 @@ webjot -watch ./path_to_sources
 
 A browser should open to your `.pub` subdirectory.  Each file will live-reload as you make changes to its source.
 
-**NOTE**: To ensure that live-refresh scripts are excluded from your final pages, be sure to re-build **without** the `-watch` flag prior to publication.
+**NOTE**: To ensure that live-refresh scripts are excluded from your final pages, be sure to re-build *without* the `-watch` flag prior to publication.
 
 ## Flags
 
