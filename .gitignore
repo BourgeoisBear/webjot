@@ -1,2 +1,4 @@
 zs
-.pub
+**/.pub
+example_site/**
+Session.vim

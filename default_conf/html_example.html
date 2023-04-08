@@ -1,0 +1,19 @@
+title: HTML Example
+author: Jason Stewart
+---
+
+<h3>Default Variables</h3>
+
+<table>
+	<tr>
+		<th>Field</th>
+		<th>Value</th>
+	</tr>
+	<tr><td>title</td><td>{{ .title }}</td></tr>
+	<tr><td>path</td><td>{{ .path }}</td></tr>
+	<tr><td>fname</td><td>{{ .fname }}</td></tr>
+	<tr><td>modified</td><td>{{ .modified }}</td></tr>
+	<tr><td>watchmode</td><td>{{ .watchmode }}</td></tr>
+</table>
+
+<p><i>NOTE</i>: Uses golang's text/template syntax.</p>

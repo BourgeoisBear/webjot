@@ -2,75 +2,65 @@ package main
 
 import (
 	"bytes"
+	"embed"
+	"flag"
 	"fmt"
+	tp_html "html/template"
 	"io"
+	"io/fs"
 	"io/ioutil"
-	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"text/template"
+	"sync"
+	tp_txt "text/template"
 	"time"
 
-	"github.com/eknkc/amber"
+	"github.com/fsnotify/fsnotify"
+	"github.com/mattn/go-isatty"
+	"github.com/pkg/errors"
 	"github.com/yosssi/gcss"
-	"gopkg.in/russross/blackfriday.v2"
-	"gopkg.in/yaml.v2"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 )
 
-const (
-	ZSDIR  = ".zs"
-	PUBDIR = ".pub"
-)
+//go:embed all:default_conf
+var defaultSiteCfg embed.FS
 
-type Vars map[string]string
-
-// renameExt renames extension (if any) from oldext to newext
-// If oldext is an empty string - extension is extracted automatically.
-// If path has no extension - new extension is appended
-func renameExt(path, oldext, newext string) string {
-	if oldext == "" {
-		oldext = filepath.Ext(path)
-	}
-	if oldext == "" || strings.HasSuffix(path, oldext) {
-		return strings.TrimSuffix(path, oldext) + newext
-	} else {
-		return path
-	}
+type Builder struct {
+	PubDir      string
+	ConfDir     string
+	DirMode     os.FileMode
+	FileMode    os.FileMode
+	Ldelim      string
+	Rdelim      string
+	Vdelim      string
+	IsShowVars  bool
+	IsTty       bool
+	IsWatchMode bool
 }
 
-// globals returns list of global OS environment variables that start
-// with ZS_ prefix as Vars, so the values can be used inside templates
-func globals() Vars {
-	vars := Vars{}
-	for _, e := range os.Environ() {
-		pair := strings.Split(e, "=")
-		if strings.HasPrefix(pair[0], "ZS_") {
-			vars[strings.ToLower(pair[0][3:])] = pair[1]
-		}
-	}
-	return vars
-}
-
-// run executes a command or a script. Vars define the command environment,
-// each zs var is converted into OS environemnt variable with ZS_ prefix
-// prepended.  Additional variable $ZS contains path to the zs binary. Command
-// stderr is printed to zs stderr, command output is returned as a string.
-func run(vars Vars, cmd string, args ...string) (string, error) {
-	// First check if partial exists (.amber or .html)
-	if b, err := ioutil.ReadFile(filepath.Join(ZSDIR, cmd+".amber")); err == nil {
-		return string(b), nil
-	}
-	if b, err := ioutil.ReadFile(filepath.Join(ZSDIR, cmd+".html")); err == nil {
-		return string(b), nil
-	}
+/*
+run executes a command or a script. Vars define the command environment,
+each zs var is converted into OS environemnt variable with ZS_ prefix
+prepended.  Additional variable $ZS contains path to the zs binary. Command
+stderr is printed to zs stderr, command output is returned as a string.
+*/
+func (oB Builder) run(mV Vars, cmd string, args ...string) (string, error) {
 
 	var errbuf, outbuf bytes.Buffer
 	c := exec.Command(cmd, args...)
-	env := []string{"ZS=" + os.Args[0], "ZS_OUTDIR=" + PUBDIR}
+
+	// TODO: shell escape
+	env := []string{"ZS=" + os.Args[0], "ZS_OUTDIR=" + oB.PubDir}
 	env = append(env, os.Environ()...)
-	for k, v := range vars {
+	for k, v := range mV {
 		env = append(env, "ZS_"+strings.ToUpper(k)+"="+v)
 	}
 	c.Env = env
@@ -79,8 +69,10 @@ func run(vars Vars, cmd string, args ...string) (string, error) {
 
 	err := c.Run()
 
+	// TODO: error reporting
 	if errbuf.Len() > 0 {
-		log.Println("ERROR:", errbuf.String())
+		fmt.Fprintf(os.Stderr, "Command Error `%s`:\n", cmd)
+		_, err = io.Copy(os.Stderr, &errbuf)
 	}
 	if err != nil {
 		return "", err
@@ -88,339 +80,536 @@ func run(vars Vars, cmd string, args ...string) (string, error) {
 	return string(outbuf.Bytes()), nil
 }
 
-// getVars returns list of variables defined in a text file and actual file
-// content following the variables declaration. Header is separated from
-// content by an empty line. Header can be either YAML or JSON.
-// If no empty newline is found - file is treated as content-only.
-func getVars(path string, globals Vars) (Vars, string, error) {
-	b, err := ioutil.ReadFile(path)
+/*
+returns list of variables defined in a text file and actual file
+content following the variables declaration.
+*/
+func (oB Builder) getVars(path string, mGlobals Vars) (
+	Vars, []byte, error,
+) {
+
+	bsSrc, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, "", err
-	}
-	s := string(b)
-
-	// Pick some default values for content-dependent variables
-	v := Vars{}
-	title := strings.Replace(strings.Replace(path, "_", " ", -1), "-", " ", -1)
-	v["title"] = strings.ToTitle(title)
-	v["description"] = ""
-	v["file"] = path
-	v["url"] = path[:len(path)-len(filepath.Ext(path))] + ".html"
-	v["output"] = filepath.Join(PUBDIR, v["url"])
-
-	// Override default values with globals
-	for name, value := range globals {
-		v[name] = value
+		return nil, nil, err
 	}
 
-	// Add layout if none is specified
-	if _, ok := v["layout"]; !ok {
-		if _, err := os.Stat(filepath.Join(ZSDIR, "layout.amber")); err == nil {
-			v["layout"] = "layout.amber"
-		} else {
-			v["layout"] = "layout.html"
-		}
+	// clone globals
+	mV := Vars{}
+	for name, value := range mGlobals {
+		mV[name] = value
 	}
 
-	delim := "\n---\n"
-	if sep := strings.Index(s, delim); sep == -1 {
-		return v, s, nil
+	// title from filename
+	fname := filepath.Base(path)
+	title := strings.TrimSuffix(fname, filepath.Ext(fname))
+	mV["title"] = strings.Title(title)
+
+	// split into header/body
+	header, body, found := bytes.Cut(bsSrc, []byte("\n"+oB.Vdelim+"\n"))
+	if !found {
+		return mV, bsSrc, nil
+	}
+
+	// parse vars from header
+	parseVarsHeader(header, mV)
+	return mV, body, nil
+}
+
+func (oB Builder) applyLayout(content string, iWri io.Writer, mV Vars) error {
+
+	relLayout := mV["layout"]
+	if len(relLayout) == 0 {
+		relLayout = "layout.html"
+	}
+
+	// load layout
+	bsLayout, err := ioutil.ReadFile(filepath.Join(oB.ConfDir, relLayout))
+	if err != nil {
+		return err
+	}
+
+	// create layout template
+	tmpl, err := tp_html.New("").
+		Delims(oB.Ldelim, oB.Rdelim).
+		Parse(string(bsLayout))
+	if err != nil {
+		return err
+	}
+
+	// clone vars
+	m := make(map[string]interface{}, len(mV))
+	for k, v := range mV {
+		m[k] = v
+	}
+	m["content"] = tp_html.HTML(content)
+
+	// render
+	return tmpl.Execute(iWri, m)
+}
+
+func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
+
+	// render vars
+	tmpl, err := tp_txt.New("").
+		Delims(oB.delims(mV)).
+		Parse(string(body))
+	if err != nil {
+		return err
+	}
+
+	var bufTmpl bytes.Buffer
+	if err = tmpl.Execute(&bufTmpl, mV); err != nil {
+		return err
+	}
+
+	// render markdown
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+			extension.Typographer,
+			extension.Table,
+		),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+		goldmark.WithRendererOptions(
+			html.WithUnsafe(),
+			html.WithXHTML(),
+		),
+	)
+
+	var strOut strings.Builder
+	if err := md.Convert(bufTmpl.Bytes(), &strOut); err != nil {
+		return err
+	}
+
+	// wrap inside layout
+	return oB.applyLayout(strOut.String(), iWri, mV)
+}
+
+func (oB Builder) buildHTML(body []byte, iWri io.Writer, mV Vars) error {
+
+	// render html
+	tmpl, err := tp_html.New("").
+		Delims(oB.delims(mV)).
+		Parse(string(body))
+	if err != nil {
+		return err
+	}
+	var strOut strings.Builder
+	if err = tmpl.Execute(&strOut, mV); err != nil {
+		return err
+	}
+
+	// wrap inside layout
+	return oB.applyLayout(strOut.String(), iWri, mV)
+}
+
+func (oB Builder) delims(mV Vars) (string, string) {
+	l, r := oB.Ldelim, oB.Rdelim
+	if v := mV["ldelim"]; len(v) > 0 {
+		l = v
+	}
+	if v := mV["rdelim"]; len(v) > 0 {
+		r = v
+	}
+	return l, r
+}
+
+func (oB Builder) buildCSS(body []byte, iWri io.Writer, mV Vars, isGCSS bool) error {
+
+	// render vars
+	tmpl, err := tp_txt.New("").
+		Delims(oB.delims(mV)).
+		Parse(string(body))
+	if err != nil {
+		return err
+	}
+
+	var bufTmpl bytes.Buffer
+	if err = tmpl.Execute(&bufTmpl, mV); err != nil {
+		return err
+	}
+
+	if isGCSS {
+		_, err = gcss.Compile(iWri, &bufTmpl)
 	} else {
-		header := s[:sep]
-		body := s[sep+len(delim):]
-
-		vars := Vars{}
-		if err := yaml.Unmarshal([]byte(header), &vars); err != nil {
-			fmt.Println("ERROR: failed to parse header", err)
-			return nil, "", err
-		} else {
-			// Override default values + globals with the ones defines in the file
-			for key, value := range vars {
-				v[key] = value
-			}
-		}
-		if strings.HasPrefix(v["url"], "./") {
-			v["url"] = v["url"][2:]
-		}
-		return v, body, nil
+		_, err = io.Copy(iWri, &bufTmpl)
 	}
+	return err
 }
 
-// Render expanding zs plugins and variables
-func render(s string, vars Vars) (string, error) {
-	delim_open := "{{"
-	delim_close := "}}"
-
-	out := &bytes.Buffer{}
-	for {
-		if from := strings.Index(s, delim_open); from == -1 {
-			out.WriteString(s)
-			return out.String(), nil
-		} else {
-			if to := strings.Index(s, delim_close); to == -1 {
-				return "", fmt.Errorf("Close delim not found")
-			} else {
-				out.WriteString(s[:from])
-				cmd := s[from+len(delim_open) : to]
-				s = s[to+len(delim_close):]
-				m := strings.Fields(cmd)
-				if len(m) == 1 {
-					if v, ok := vars[m[0]]; ok {
-						out.WriteString(v)
-						continue
-					}
-				}
-				if res, err := run(vars, m[0], m[1:]...); err == nil {
-					out.WriteString(res)
-				} else {
-					fmt.Println(err)
-				}
-			}
-		}
+func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
+	err := oB.innerBuild(path, iWri, mV)
+	if err != nil && err != fs.SkipDir {
+		err = errors.WithMessage(err, path)
 	}
-	return s, nil
+	return err
 }
 
-// Renders markdown with the given layout into html expanding all the macros
-func buildMarkdown(path string, w io.Writer, vars Vars) error {
-	v, body, err := getVars(path, vars)
+func (oB Builder) innerBuild(path string, iWri io.Writer, mV Vars) error {
+
+	var err error
+
+	// get src info
+	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-	content, err := render(body, v)
+
+	// skip hidden
+	if strings.HasPrefix(info.Name(), ".") {
+		if info.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+
+	// get relative path of src
+	relpath, err := filepath.Rel(filepath.Dir(oB.ConfDir), path)
 	if err != nil {
 		return err
 	}
-	v["content"] = string(blackfriday.Run([]byte(content)))
-	if w == nil {
-		out, err := os.Create(filepath.Join(PUBDIR, renameExt(path, "", ".html")))
+
+	// create dst from relative path
+	dst := filepath.Join(oB.PubDir, relpath)
+
+	// create destination dirs
+	if info.IsDir() {
+		err = os.MkdirAll(dst, oB.DirMode)
+		if os.IsExist(err) {
+			err = nil
+		}
+		return err
+	}
+
+	// progress indicator
+	if oB.IsTty {
+		fmt.Print("\x1b[96;1m>\x1b[0m ")
+	} else {
+		fmt.Print("> ")
+	}
+	fmt.Println(relpath)
+
+	// extension renames
+	ext := strings.ToLower(filepath.Ext(path))
+	bGetVars := false
+	switch ext {
+	case ".md", ".mkd":
+		dst = strings.TrimSuffix(dst, ext) + ".html"
+		bGetVars = true
+	case ".html", ".xml":
+		bGetVars = true
+	case ".css":
+		bGetVars = true
+	case ".gcss":
+		dst = strings.TrimSuffix(dst, ext) + ".css"
+		bGetVars = true
+	}
+
+	// vars
+	var body []byte
+	if bGetVars {
+		mV, body, err = oB.getVars(path, mV)
+		if err != nil {
+			return err
+		}
+		mV["path"] = relpath
+		mV["fname"] = filepath.Base(path)
+		mV["modified"] = info.ModTime().Format(time.RFC3339)
+		if oB.IsWatchMode {
+			mV["watchmode"] = "enabled"
+		}
+
+		if oB.IsShowVars {
+			mV.PrettyPrint(os.Stdout, oB.IsTty)
+		}
+	}
+
+	// create output file
+	if iWri == nil {
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, oB.FileMode)
 		if err != nil {
 			return err
 		}
 		defer out.Close()
-		w = out
+		iWri = out
 	}
-	if strings.HasSuffix(v["layout"], ".amber") {
-		return buildAmber(filepath.Join(ZSDIR, v["layout"]), w, v)
-	} else {
-		return buildHTML(filepath.Join(ZSDIR, v["layout"]), w, v)
-	}
-}
 
-// Renders text file expanding all variable macros inside it
-func buildHTML(path string, w io.Writer, vars Vars) error {
-	v, body, err := getVars(path, vars)
-	if err != nil {
-		return err
-	}
-	if body, err = render(body, v); err != nil {
-		return err
-	}
-	tmpl, err := template.New("").Delims("<%", "%>").Parse(body)
-	if err != nil {
-		return err
-	}
-	if w == nil {
-		f, err := os.Create(filepath.Join(PUBDIR, path))
-		if err != nil {
-			return err
+	// build
+	switch ext {
+	case ".md", ".mkd":
+		return oB.buildMarkdown(body, iWri, mV)
+	case ".html", ".xml":
+		return oB.buildHTML(body, iWri, mV)
+	case ".css":
+		return oB.buildCSS(body, iWri, mV, false)
+	case ".gcss":
+		return oB.buildCSS(body, iWri, mV, true)
+	default:
+		fSrc, err := os.Open(path)
+		if err == nil {
+			_, err = io.Copy(iWri, fSrc)
+			fSrc.Close()
 		}
-		defer f.Close()
-		w = f
-	}
-	return tmpl.Execute(w, vars)
-}
-
-// Renders .amber file into .html
-func buildAmber(path string, w io.Writer, vars Vars) error {
-	v, body, err := getVars(path, vars)
-	if err != nil {
 		return err
-	}
-	a := amber.New()
-	if err := a.Parse(body); err != nil {
-		fmt.Println(body)
-		return err
-	}
-
-	t, err := a.Compile()
-	if err != nil {
-		return err
-	}
-
-	htmlBuf := &bytes.Buffer{}
-	if err := t.Execute(htmlBuf, v); err != nil {
-		return err
-	}
-
-	if body, err = render(string(htmlBuf.Bytes()), v); err != nil {
-		return err
-	}
-
-	if w == nil {
-		f, err := os.Create(filepath.Join(PUBDIR, renameExt(path, ".amber", ".html")))
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		w = f
-	}
-	_, err = io.WriteString(w, body)
-	return err
-}
-
-// Compiles .gcss into .css
-func buildGCSS(path string, w io.Writer) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if w == nil {
-		s := strings.TrimSuffix(path, ".gcss") + ".css"
-		css, err := os.Create(filepath.Join(PUBDIR, s))
-		if err != nil {
-			return err
-		}
-		defer css.Close()
-		w = css
-	}
-	_, err = gcss.Compile(w, f)
-	return err
-}
-
-// Copies file as is from path to writer
-func buildRaw(path string, w io.Writer) error {
-	in, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	if w == nil {
-		if out, err := os.Create(filepath.Join(PUBDIR, path)); err != nil {
-			return err
-		} else {
-			defer out.Close()
-			w = out
-		}
-	}
-	_, err = io.Copy(w, in)
-	return err
-}
-
-func build(path string, w io.Writer, vars Vars) error {
-	ext := filepath.Ext(path)
-	if ext == ".md" || ext == ".mkd" {
-		return buildMarkdown(path, w, vars)
-	} else if ext == ".html" || ext == ".xml" {
-		return buildHTML(path, w, vars)
-	} else if ext == ".amber" {
-		return buildAmber(path, w, vars)
-	} else if ext == ".gcss" {
-		return buildGCSS(path, w)
-	} else {
-		return buildRaw(path, w)
 	}
 }
 
-func buildAll(watch bool) {
-	lastModified := time.Unix(0, 0)
-	modified := false
+func (oB Builder) buildAll(srcDir string) error {
 
 	vars := globals()
-	for {
-		os.Mkdir(PUBDIR, 0755)
-		filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-			// ignore hidden files and directories
-			if filepath.Base(path)[0] == '.' || strings.HasPrefix(path, ".") {
-				return nil
-			}
-			// inform user about fs walk errors, but continue iteration
-			if err != nil {
-				fmt.Println("error:", err)
-				return nil
-			}
 
-			if info.IsDir() {
-				os.Mkdir(filepath.Join(PUBDIR, path), 0755)
-				return nil
-			} else if info.ModTime().After(lastModified) {
-				if !modified {
-					// First file in this build cycle is about to be modified
-					run(vars, "prehook")
-					modified = true
-				}
-				log.Println("build:", path)
-				return build(path, nil, vars)
-			}
-			return nil
-		})
-		if modified {
-			// At least one file in this build cycle has been modified
-			run(vars, "posthook")
-			modified = false
+	// recurse through source dir
+	wdFunc := func(path string, info fs.DirEntry, eWalk error) error {
+		if eWalk != nil {
+			return errors.WithMessage(eWalk, path)
+		} else {
+			return oB.build(path, nil, vars)
 		}
-		if !watch {
-			break
-		}
-		lastModified = time.Now()
-		time.Sleep(1 * time.Second)
 	}
+
+	return filepath.WalkDir(srcDir, wdFunc)
 }
 
-func init() {
-	// prepend .zs to $PATH, so plugins will be found before OS commands
-	p := os.Getenv("PATH")
-	p = ZSDIR + ":" + p
-	os.Setenv("PATH", p)
+func (oB Builder) watch(srcDir string) error {
+
+	// create new watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+
+	// listen for events
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+
+		defer wg.Done()
+
+		vars := globals()
+		for {
+			select {
+			case evt, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				// rebuild file
+				if evt.Has(fsnotify.Write) {
+
+					modDir := filepath.Dir(evt.Name)
+
+					// skip PubDir changes
+					if filepath.HasPrefix(modDir, oB.PubDir) {
+						break
+					}
+
+					fmt.Println(evt)
+
+					if filepath.HasPrefix(modDir, oB.ConfDir) {
+						// rebuild all on ConfDir changes
+						errRpt(oB.buildAll(filepath.Dir(oB.ConfDir)), oB.IsTty)
+					} else {
+						// otherwise, rebuild dirty file only
+						errRpt(oB.build(evt.Name, nil, vars), oB.IsTty)
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				errRpt(err, oB.IsTty)
+			}
+		}
+	}()
+
+	// add dirs to watch
+	err = filepath.WalkDir(
+		srcDir,
+		func(src string, info fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			// only watch non-hidden dirs
+			if !info.IsDir() || strings.HasPrefix(info.Name(), ".") {
+				return nil
+			}
+			return watcher.Add(src)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// add conf dir
+	if err = watcher.Add(oB.ConfDir); err != nil {
+		return err
+	}
+
+	wg.Wait()
+	return nil
+}
+
+func (oB Builder) initSite(tgtDir string) error {
+
+	tgtDir, err := filepath.Abs(tgtDir)
+	if err != nil {
+		return err
+	}
+
+	cfgDir := filepath.Join(tgtDir, ".zs")
+	if err = os.MkdirAll(cfgDir, oB.DirMode); err != nil {
+		return err
+	}
+
+	sD, err := defaultSiteCfg.ReadDir("default_conf")
+	if err != nil {
+		return err
+	}
+
+	for ix := range sD {
+
+		if sD[ix].IsDir() {
+			continue
+		}
+		fname := sD[ix].Name()
+
+		// open src
+		fSrc, err := defaultSiteCfg.Open("default_conf/" + fname)
+		if err != nil {
+			return err
+		}
+		defer fSrc.Close()
+
+		// determine dst dir
+		dstDir := tgtDir
+		if fname == "layout.html" {
+			dstDir = cfgDir
+		}
+
+		// open dst
+		fDst, err := os.OpenFile(
+			filepath.Join(dstDir, fname),
+			os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+			oB.FileMode,
+		)
+		if err != nil {
+			return err
+		}
+		defer fDst.Close()
+
+		// copy from src to dst
+		if _, err = io.Copy(fDst, fSrc); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
-	if len(os.Args) == 1 {
-		fmt.Println(os.Args[0], "<command> [args]")
+
+	bIsTty := isatty.IsTerminal(os.Stdout.Fd())
+
+	var err error
+	defer func() {
+		errRpt(err, bIsTty)
+	}()
+
+	oB := Builder{
+		DirMode:  0755,
+		FileMode: 0644,
+		IsTty:    bIsTty,
+	}
+
+	flag.StringVar(&oB.Ldelim, "ldelim", "{{", "left template delimiter")
+	flag.StringVar(&oB.Rdelim, "rdelim", "}}", "right template delimiter")
+	flag.StringVar(&oB.Vdelim, "vdelim", "---", "vars/body delimiter")
+	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show per-page render vars on build")
+
+	var httpPort int
+	flag.BoolVar(&oB.IsWatchMode, "watch", false, "rebuild on file change")
+	flag.IntVar(&httpPort, "port", 8080, "HTTP port for watch-mode web server")
+
+	bInit := false
+	flag.BoolVar(&bInit, "init", false, "create a new site configuration inside the given directory")
+
+	flag.Parse()
+	args := flag.Args()
+
+	var tgt string
+	if len(args) > 0 {
+		tgt = args[0]
+	}
+
+	// create new site
+	if bInit {
+		err = oB.initSite(tgt)
 		return
 	}
-	cmd := os.Args[1]
-	args := os.Args[2:]
-	switch cmd {
-	case "build":
-		if len(args) == 0 {
-			buildAll(false)
-		} else if len(args) == 1 {
-			if err := build(args[0], os.Stdout, globals()); err != nil {
-				fmt.Println("ERROR: " + err.Error())
+
+	if len(tgt) == 0 {
+		if tgt, err = os.Getwd(); err != nil {
+			return
+		}
+	}
+
+	// lookup conf dir parent
+	conf, err := searchDirAncestors(tgt, ".zs")
+	if err != nil {
+		return
+	}
+
+	webRoot := filepath.Dir(conf)
+
+	// settings
+	oB.PubDir = filepath.Join(webRoot, ".pub")
+	oB.ConfDir = conf
+
+	// absolute paths
+	for _, ps := range []*string{&tgt, &oB.PubDir, &oB.ConfDir} {
+		if *ps, err = filepath.Abs(*ps); err != nil {
+			return
+		}
+	}
+
+	// prepend .zs to $PATH, so plugins will be found before OS commands
+	// p := os.Getenv("PATH")
+	// p = ZSDIR + ":" + p
+	// os.Setenv("PATH", p)
+
+	if err = oB.buildAll(tgt); err != nil {
+		return
+	}
+
+	if oB.IsWatchMode {
+
+		// start watch webserver
+		go func() {
+
+			szPort := strconv.Itoa(httpPort)
+			fmt.Printf("serving %s on port %d\n", oB.PubDir, httpPort)
+
+			htdocs := http.Dir(oB.PubDir)
+			hdl := HeadHandler(htdocs, http.FileServer(htdocs))
+			http.Handle("/", hdl)
+
+			// open web browser
+			go func() {
+				time.Sleep(time.Second)
+				errRpt(OpenBrowser("http://localhost:"+szPort), bIsTty)
+			}()
+
+			// start http server
+			e2 := http.ListenAndServe(":"+szPort, nil)
+			if e2 != nil {
+				errRpt(e2, bIsTty)
 			}
-		} else {
-			fmt.Println("ERROR: too many arguments")
-		}
-	case "watch":
-		buildAll(true)
-	case "var":
-		if len(args) == 0 {
-			fmt.Println("var: filename expected")
-		} else {
-			s := ""
-			if vars, _, err := getVars(args[0], Vars{}); err != nil {
-				fmt.Println("var: " + err.Error())
-			} else {
-				if len(args) > 1 {
-					for _, a := range args[1:] {
-						s = s + vars[a] + "\n"
-					}
-				} else {
-					for k, v := range vars {
-						s = s + k + ":" + v + "\n"
-					}
-				}
-			}
-			fmt.Println(strings.TrimSpace(s))
-		}
-	default:
-		if s, err := run(globals(), cmd, args...); err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Println(s)
-		}
+
+		}()
+
+		// rebuild on change
+		err = oB.watch(webRoot)
 	}
 }

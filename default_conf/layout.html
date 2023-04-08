@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+	<head>
+		<meta http-equiv="Content-Type"  content="text/html; charset=utf-8"/>
+		<meta name="viewport"            content="width=device-width, initial-scale=1"/>
+		<link rel="stylesheet" type="text/css" href="/style.css"/>
+		{{ if .watchmode }}<script src="/live.js"></script>{{ end }}
+		<title>{{ .title }}</title>
+	</head>
+	<body>
+		<article>
+			{{ if .title }}<h1>{{ .title }}</h1>{{ end }}
+			{{ .content }}
+		</article>
+		<hr />
+		<div class="contact"><a href="https://cryptoddns.net">cryptoddns.net</a></div>
+	</body>
+</html>

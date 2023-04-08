@@ -1,0 +1,60 @@
+body {
+	padding: 1em;
+	font-size: 13pt;
+	font-family: "PT Serif", Georgia, serif;
+}
+
+.logo-main {
+	width: 11rem;
+	height: auto;
+	display: block;
+	margin: 0px auto 2rem auto;
+}
+
+hr {
+	margin: 2.5rem auto;
+	max-width: 8.5in;
+}
+
+h3 {
+	font-size: 14pt;
+}
+
+h3 > a {
+	text-decoration: none;
+}
+
+article {
+	margin: 0px auto;
+	max-width: 5.75in;
+	line-height: 1.3em;
+}
+
+blockquote {
+	margin: 0px auto;
+	max-width: 5.75in;
+	text-align: justify;
+	line-height: 1.3em;
+	font-style: italic;
+}
+
+.contact {
+	text-align: center;
+	margin: 2rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #e9be7a;
+    background: #14181B;
+  }
+
+  a {
+    color: hsl(37, 72%, 56%);
+  }
+
+	a:visited {
+    color: hsl(37, 72%, 36%);
+	}
+
+}
