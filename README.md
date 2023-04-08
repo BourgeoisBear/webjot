@@ -1,3 +1,5 @@
+# webjot
+
 Another static site generator, and an opinionated fork of https://github.com/zserge/zs.
 
 ## Features
@@ -10,19 +12,19 @@ Another static site generator, and an opinionated fork of https://github.com/zse
 
 ## Installation
 
-`go install github.com/BourgeoisBear/zs@latest`
+`go install github.com/BourgeoisBear/webjot@latest`
 
 ## Usage
 
-| Action                               | Command                        |
-| ------                               | -------                        |
-| create new site                      | `zs -init <new_site_path>`     |
-| re-build site                        | `zs <site_source_path>`        |
-| update site contents w/ live refresh | `zs -watch <site_source_path>` |
+| Action                               | Command                            |
+| ------                               | -------                            |
+| create new site                      | `webjot -init <new_site_path>`     |
+| re-build site                        | `webjot <site_source_path>`        |
+| update site contents w/ live refresh | `webjot -watch <site_source_path>` |
 
 Keep your texts in markdown or HTML format, right in the main directory of your blog/site.
 
-Keep all service files (extensions, layout pages, deployment scripts etc) in the `.zs` subdirectory.
+Keep all service files (extensions, layout pages, deployment scripts etc) in the `.webjot` subdirectory.
 
 Define variables in the header of the content files using [YAML]:
 
@@ -34,13 +36,13 @@ Define variables in the header of the content files using [YAML]:
 
 Use placeholders for variables and plugins in your markdown or html files, e.g. `{{ title }}` or `{{ command arg1 arg2 }}.
 
-Write extensions in any language you like and put them into the `.zs` subdirectory.
+Write extensions in any language you like and put them into the `.webjot` subdirectory.
 
 Everything the extensions prints to stdout becomes the value of the placeholder.
 
 Every variable from the content header will be passed via environment variables like `title` becomes `$ZS_TITLE` and so on. There are some special variables:
 
-* `$ZS` - a path to the `zs` executable
+* `$ZS` - a path to the `webjot` executable
 * `$ZS_OUTDIR` - a path to the directory with generated files
 * `$ZS_FILE` - a path to the currently processed markdown file
 * `$ZS_URL` - a URL for the currently generated page
@@ -50,7 +52,7 @@ Every variable from the content header will be passed via environment variables 
 ## Flags
 
 ```
-Usage of zs:
+Usage of webjot:
   -init
         create a new site configuration inside the given directory
   -ldelim string

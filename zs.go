@@ -30,6 +30,8 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 )
 
+const CFGDIR = ".webjot"
+
 //go:embed all:default_conf
 var defaultSiteCfg embed.FS
 
@@ -458,7 +460,7 @@ func (oB Builder) initSite(tgtDir string) error {
 		return err
 	}
 
-	cfgDir := filepath.Join(tgtDir, ".zs")
+	cfgDir := filepath.Join(tgtDir, CFGDIR)
 	if err = os.MkdirAll(cfgDir, oB.DirMode); err != nil {
 		return err
 	}
@@ -556,7 +558,7 @@ func main() {
 	}
 
 	// lookup conf dir parent
-	conf, err := searchDirAncestors(tgt, ".zs")
+	conf, err := searchDirAncestors(tgt, CFGDIR)
 	if err != nil {
 		return
 	}
@@ -574,7 +576,7 @@ func main() {
 		}
 	}
 
-	// prepend .zs to $PATH, so plugins will be found before OS commands
+	// prepend CFGDIR to $PATH, so plugins will be found before OS commands
 	// p := os.Getenv("PATH")
 	// p = ZSDIR + ":" + p
 	// os.Setenv("PATH", p)
