@@ -31,6 +31,7 @@ import (
 )
 
 const CFGDIR = ".webjot"
+const PUBDIR = ".pub"
 
 //go:embed all:default_conf
 var defaultSiteCfg embed.FS
@@ -542,11 +543,11 @@ func main() {
 	flag.CommandLine.SetOutput(iWri)
 	flag.Usage = func() {
 
-		fmt.Fprint(iWri, `USAGE
+		fmt.Fprintf(iWri, `USAGE
   webjot [FLAG]... <source dir>
 
 Static site template renderer.
-Templates in <source dir> are rendered to the '<source dir>/.pub' directory.
+Templates in <source dir> are rendered to the '<source dir>/%s' directory.
 
 The default delimiters '{{' and '}}' are escaped thus:
 
@@ -554,12 +555,11 @@ The default delimiters '{{' and '}}' are escaped thus:
   {{ "}}" }}
 
 FLAG
-`)
+`, PUBDIR)
 		flag.PrintDefaults()
 
 		fmt.Fprint(iWri, `
 EXAMPLES
-
   create new site:
     webjot -init <new_site_path>
 
@@ -601,7 +601,7 @@ EXAMPLES
 	webRoot := filepath.Dir(conf)
 
 	// settings
-	oB.PubDir = filepath.Join(webRoot, ".pub")
+	oB.PubDir = filepath.Join(webRoot, PUBDIR)
 	oB.ConfDir = conf
 
 	// absolute paths
