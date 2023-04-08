@@ -69,7 +69,7 @@ func (oB Builder) getVars(path string, mGlobals Vars) (
 }
 
 // TODO: vars header?
-func (oB Builder) applyLayout(content string, iWri io.Writer, mV Vars) error {
+func (oB Builder) applyLayout(content tp_html.HTML, iWri io.Writer, mV Vars) error {
 
 	relLayout := mV["layout"]
 	if len(relLayout) == 0 {
@@ -84,7 +84,8 @@ func (oB Builder) applyLayout(content string, iWri io.Writer, mV Vars) error {
 
 	// create layout template
 	tmpl, err := tp_html.New("").
-		Delims(oB.Ldelim, oB.Rdelim).
+		Delims(oB.delimOvr(mV)).
+		Funcs(funcMap(mV)).
 		Parse(string(bsLayout))
 	if err != nil {
 		return err
@@ -95,21 +96,22 @@ func (oB Builder) applyLayout(content string, iWri io.Writer, mV Vars) error {
 	for k, v := range mV {
 		m[k] = v
 	}
-	m["content"] = tp_html.HTML(content)
+	m["content"] = content
 
 	// render
 	return tmpl.Execute(iWri, m)
 }
 
-// TODO: rename
-func (oB Builder) delims(mV Vars) (string, string) {
+func (oB Builder) delimOvr(mV Vars) (string, string) {
 	l, r := oB.Ldelim, oB.Rdelim
-	if v := mV["ldelim"]; len(v) > 0 {
-		l = v
-	}
-	if v := mV["rdelim"]; len(v) > 0 {
-		r = v
-	}
+	/*
+		if v := mV["ldelim"]; len(v) > 0 {
+			l = v
+		}
+		if v := mV["rdelim"]; len(v) > 0 {
+			r = v
+		}
+	*/
 	return l, r
 }
 
@@ -117,7 +119,8 @@ func (oB Builder) buildCSS(body []byte, iWri io.Writer, mV Vars, isGCSS bool) er
 
 	// render vars
 	tmpl, err := tp_txt.New("").
-		Delims(oB.delims(mV)).
+		Delims(oB.delimOvr(mV)).
+		Funcs(funcMap(mV)).
 		Parse(string(body))
 	if err != nil {
 		return err
@@ -140,7 +143,8 @@ func (oB Builder) buildHTML(body []byte, iWri io.Writer, mV Vars) error {
 
 	// render html
 	tmpl, err := tp_html.New("").
-		Delims(oB.delims(mV)).
+		Delims(oB.delimOvr(mV)).
+		Funcs(funcMap(mV)).
 		Parse(string(body))
 	if err != nil {
 		return err
@@ -151,14 +155,15 @@ func (oB Builder) buildHTML(body []byte, iWri io.Writer, mV Vars) error {
 	}
 
 	// wrap inside layout
-	return oB.applyLayout(strOut.String(), iWri, mV)
+	return oB.applyLayout(tp_html.HTML(strOut.String()), iWri, mV)
 }
 
 func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
 
 	// render vars
 	tmpl, err := tp_txt.New("").
-		Delims(oB.delims(mV)).
+		Delims(oB.delimOvr(mV)).
+		Funcs(funcMap(mV)).
 		Parse(string(body))
 	if err != nil {
 		return err
@@ -168,7 +173,6 @@ func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
 	if err = tmpl.Execute(&bufTmpl, mV); err != nil {
 		return err
 	}
-
 	// render markdown
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -191,7 +195,7 @@ func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
 	}
 
 	// wrap inside layout
-	return oB.applyLayout(strOut.String(), iWri, mV)
+	return oB.applyLayout(tp_html.HTML(strOut.String()), iWri, mV)
 }
 
 func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
@@ -261,6 +265,7 @@ func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
 		if err != nil {
 			return err
 		}
+		mV["pubdir"] = oB.PubDir
 		mV["path"] = relpath
 		mV["fname"] = filepath.Base(path)
 		mV["modified"] = info.ModTime().Format(time.RFC3339)
@@ -309,30 +314,48 @@ each var is converted into OS environemnt variable with ZS_ prefix
 prepended.  Additional variable $ZS contains path to the binary. Command
 stderr is printed to stderr, command output is returned as a string.
 */
-func (oB Builder) run(mV Vars, cmd string, args ...string) (string, error) {
+func runCmd(mV Vars, cmd string, args ...string) (sout, serr []byte, err error) {
 
 	var errbuf, outbuf bytes.Buffer
 	c := exec.Command(cmd, args...)
 
-	// TODO: shell escape
-	env := []string{"ZS=" + os.Args[0], "ZS_OUTDIR=" + oB.PubDir}
-	env = append(env, os.Environ()...)
+	env := os.Environ()
 	for k, v := range mV {
 		env = append(env, "ZS_"+strings.ToUpper(k)+"="+v)
 	}
+
 	c.Env = env
 	c.Stdout = &outbuf
 	c.Stderr = &errbuf
 
-	err := c.Run()
+	err = c.Run()
+	return outbuf.Bytes(), errbuf.Bytes(), err
+}
 
-	// TODO: error reporting
-	if errbuf.Len() > 0 {
-		fmt.Fprintf(os.Stderr, "Command Error `%s`:\n", cmd)
-		_, err = io.Copy(os.Stderr, &errbuf)
-	}
+func runCmdMergedOutput(mV Vars, cmd string, args ...string) string {
+	so, se, err := runCmd(mV, cmd, args...)
+
+	parts := make([]string, 0, 3)
 	if err != nil {
-		return "", err
+		cmdstr := cmd + " " + strings.Join(args, " ")
+		parts = append(parts, fmt.Sprintf("CMD ERROR on `%s`: %s", cmdstr, err.Error()))
 	}
-	return string(outbuf.Bytes()), nil
+	if len(se) > 0 {
+		parts = append(parts, string(se))
+	}
+	if len(so) > 0 {
+		parts = append(parts, string(so))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func funcMap(mV Vars) map[string]interface{} {
+	return map[string]interface{}{
+		"cmdText": func(cmd string, params ...string) string {
+			return runCmdMergedOutput(mV, cmd, params...)
+		},
+		"cmdHtml": func(cmd string, params ...string) tp_html.HTML {
+			return tp_html.HTML(runCmdMergedOutput(mV, cmd, params...))
+		},
+	}
 }

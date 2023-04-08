@@ -34,9 +34,7 @@ func build2(oB Builder, path string, iWri io.Writer, mV Vars) error {
 }
 
 func buildAll(oB Builder, srcDir string) error {
-
 	vars := globals()
-
 	// recurse through source dir
 	wdFunc := func(path string, info fs.DirEntry, eWalk error) error {
 		if eWalk != nil {
@@ -45,7 +43,6 @@ func buildAll(oB Builder, srcDir string) error {
 			return build2(oB, path, nil, vars)
 		}
 	}
-
 	return filepath.WalkDir(srcDir, wdFunc)
 }
 
@@ -84,14 +81,15 @@ func watch(oB Builder, srcDir string) error {
 
 					fmt.Println(evt)
 
+					var e2 error
 					if filepath.HasPrefix(modDir, oB.ConfDir) {
 						// rebuild all on ConfDir changes
-						errRpt(buildAll(oB, filepath.Dir(oB.ConfDir)), oB.IsTty)
+						e2 = buildAll(oB, filepath.Dir(oB.ConfDir))
 					} else {
-						// TODO: handle skipdir err
 						// otherwise, rebuild dirty file only
-						errRpt(build2(oB, evt.Name, nil, vars), oB.IsTty)
+						e2 = build2(oB, evt.Name, nil, vars)
 					}
+					errRpt(e2, oB.IsTty)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
