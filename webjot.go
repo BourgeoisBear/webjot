@@ -50,9 +50,9 @@ type Builder struct {
 
 /*
 run executes a command or a script. Vars define the command environment,
-each zs var is converted into OS environemnt variable with ZS_ prefix
-prepended.  Additional variable $ZS contains path to the zs binary. Command
-stderr is printed to zs stderr, command output is returned as a string.
+each var is converted into OS environemnt variable with ZS_ prefix
+prepended.  Additional variable $ZS contains path to the binary. Command
+stderr is printed to stderr, command output is returned as a string.
 */
 func (oB Builder) run(mV Vars, cmd string, args ...string) (string, error) {
 
@@ -537,6 +537,41 @@ func main() {
 	bInit := false
 	flag.BoolVar(&bInit, "init", false, "create a new site configuration inside the given directory")
 
+	// help message
+	var iWri io.Writer = os.Stdout
+	flag.CommandLine.SetOutput(iWri)
+	flag.Usage = func() {
+
+		fmt.Fprint(iWri, `USAGE
+  webjot [FLAG]... <source dir>
+
+Static site template renderer.
+Templates in <source dir> are rendered to the '<source dir>/.pub' directory.
+
+The default delimiters '{{' and '}}' are escaped thus:
+
+  {{ "{{" }}
+  {{ "}}" }}
+
+FLAG
+`)
+		flag.PrintDefaults()
+
+		fmt.Fprint(iWri, `
+EXAMPLES
+
+  create new site:
+    webjot -init <new_site_path>
+
+  re-build site:
+    webjot <site_source_path>
+
+  update site contents w/ live refresh:
+    webjot -watch <site_source_path>
+`)
+
+		fmt.Fprint(iWri, "\n")
+	}
 	flag.Parse()
 	args := flag.Args()
 
