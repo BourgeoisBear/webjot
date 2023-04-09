@@ -43,7 +43,7 @@ Templating Variables
 
 	ldelim: <?
 	rdelim: ?>
-	---
+	@@@@@@@
 	content begins here...
 
 Variable Precedence
@@ -61,7 +61,7 @@ Define variables in the header of the content files using:
 ```
 title: My web site
 keywords: best website, hello, world
----
+@@@@@@@
 
 # {{ .title }}
 Markdown text goes after a header *separator*
@@ -98,23 +98,40 @@ A browser should open to your `.pub` subdirectory.  Each file will live-reload a
 
 **NOTE**: To ensure that live-refresh scripts are excluded from your final pages, be sure to re-build *without* the `-watch` flag prior to publication.
 
-## Flags
+## CLI Help
 
 ```
-Usage of webjot:
+USAGE
+  webjot [FLAG]... <source dir>
+
+Static site template renderer.
+Templates in <source dir> are rendered to the '<source dir>/.pub' directory.
+
+The default delimiters '{{' and '}}' are escaped thus:
+
+  {{ "{{" }}
+  {{ "}}" }}
+
+FLAG
   -init
         create a new site configuration inside the given directory
-  -ldelim string
-        left template delimiter (default "{{")
   -port int
         HTTP port for watch-mode web server (default 8080)
-  -rdelim string
-        right template delimiter (default "}}")
   -vdelim string
-        vars/body delimiter (default "---")
+        vars/body delimiter (default "@@@@@@@")
   -vshow
         show per-page render vars on build
   -watch
         rebuild on file change
+
+EXAMPLES
+  create new site:
+    webjot -init <new_site_path>
+
+  re-build site:
+    webjot <site_source_path>
+
+  update site contents w/ live refresh:
+    webjot -watch <site_source_path>
 ```
 

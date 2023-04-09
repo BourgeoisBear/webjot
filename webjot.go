@@ -19,8 +19,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const CFGDIR = ".webjot"
-const PUBDIR = ".pub"
+const (
+	CFGDIR        = ".webjot"
+	PUBDIR        = ".pub"
+	DEFAULT_DELIM = "@@@@@@@"
+)
 
 //go:embed all:default_conf
 var defaultSiteCfg embed.FS
@@ -197,7 +200,7 @@ func main() {
 		IsTty:    bIsTty,
 	}
 
-	flag.StringVar(&oB.Vdelim, "vdelim", "---", "vars/body delimiter")
+	flag.StringVar(&oB.Vdelim, "vdelim", DEFAULT_DELIM, "vars/body delimiter")
 	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show per-page render vars on build")
 
 	var httpPort int
