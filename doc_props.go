@@ -1,10 +1,10 @@
 package main
 
 import (
-	tHtml "html/template"
 	"io"
 	"os"
 	"regexp"
+	tmpl "text/template"
 )
 
 type DocProps struct {
@@ -12,7 +12,7 @@ type DocProps struct {
 	Info   os.FileInfo
 	Body   []byte
 	Vars   Vars
-	Layout *tHtml.Template
+	Layout *tmpl.Template
 }
 
 /*
@@ -38,13 +38,9 @@ func (doc *DocProps) ApplyLayout(bsContent []byte, iWri io.Writer) error {
 	*/
 
 	// render
-	vi := make(map[string]interface{}, len(doc.Vars)+1)
-	for k, v := range doc.Vars {
-		vi[k] = v
-	}
-	vi["HTML_CONTENT"] = tHtml.HTML(bsContent)
+	doc.Vars["HTML_CONTENT"] = string(bsContent)
 	// NOTE: re-populate Funcs() to bind updated Vars
-	return doc.Layout.Funcs(funcMap(doc.Vars)).Execute(iWri, vi)
+	return doc.Layout.Funcs(funcMap(doc.Vars)).Execute(iWri, doc.Vars)
 }
 
 /*
