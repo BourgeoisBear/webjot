@@ -25,7 +25,7 @@ go install github.com/BourgeoisBear/webjot@latest
 | update site contents w/ live refresh | `webjot -watch <site_source_path>` |
 
 Keep your texts in markdown or HTML format, right in the main directory of your
-blog/site.  Keep all service files (extensions, layout pages, deployment
+blog/site `<site>`.  Keep all service files (extensions, layout pages, deployment
 scripts etc) in the `<site>/.webjot` subdirectory.  Site will be rendered to the
 `<site>/.pub` subdirectory.
 
