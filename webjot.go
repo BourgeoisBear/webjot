@@ -25,8 +25,8 @@ const PUBDIR = ".pub"
 //go:embed all:default_conf
 var defaultSiteCfg embed.FS
 
-func build2(oB Builder, path string, iWri io.Writer, mV Vars) error {
-	err := oB.build(path, iWri, mV)
+func build2(oB Builder, path string, iWri io.Writer) error {
+	err := oB.build(path, iWri)
 	if err != nil && err != fs.SkipDir {
 		err = errors.WithMessage(err, path)
 	}
@@ -34,13 +34,12 @@ func build2(oB Builder, path string, iWri io.Writer, mV Vars) error {
 }
 
 func buildAll(oB Builder, srcDir string) error {
-	vars := globals()
 	// recurse through source dir
 	wdFunc := func(path string, info fs.DirEntry, eWalk error) error {
 		if eWalk != nil {
 			return errors.WithMessage(eWalk, path)
 		} else {
-			return build2(oB, path, nil, vars)
+			return build2(oB, path, nil)
 		}
 	}
 	return filepath.WalkDir(srcDir, wdFunc)
@@ -62,7 +61,6 @@ func watch(oB Builder, srcDir string) error {
 
 		defer wg.Done()
 
-		vars := globals()
 		for {
 			select {
 			case evt, ok := <-watcher.Events:
@@ -87,7 +85,7 @@ func watch(oB Builder, srcDir string) error {
 						e2 = buildAll(oB, filepath.Dir(oB.ConfDir))
 					} else {
 						// otherwise, rebuild dirty file only
-						e2 = build2(oB, evt.Name, nil, vars)
+						e2 = build2(oB, evt.Name, nil)
 					}
 					errRpt(e2, oB.IsTty)
 				}
@@ -199,8 +197,6 @@ func main() {
 		IsTty:    bIsTty,
 	}
 
-	flag.StringVar(&oB.Ldelim, "ldelim", "{{", "left template delimiter")
-	flag.StringVar(&oB.Rdelim, "rdelim", "}}", "right template delimiter")
 	flag.StringVar(&oB.Vdelim, "vdelim", "---", "vars/body delimiter")
 	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show per-page render vars on build")
 

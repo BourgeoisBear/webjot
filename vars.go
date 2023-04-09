@@ -11,6 +11,11 @@ import (
 
 type Vars map[string]string
 
+func (mV Vars) ClearDelims() {
+	delete(mV, "ldelim")
+	delete(mV, "rdelim")
+}
+
 func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
 
 	klen := 0
@@ -40,9 +45,17 @@ func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
 split each line inside the header section into (key, value) pairs
 append each found pair into mV
 */
-func parseVarsHeader(header []byte, mV Vars) {
+func ParseHeaderVars(header []byte) Vars {
+
 	lines := bytes.Split(header, []byte("\n"))
+	mV := make(Vars, len(lines))
 	for _, line := range lines {
+
+		// skip comment lines beginning with #
+		if bytes.HasPrefix(line, []byte("#")) {
+			continue
+		}
+
 		key, val, found := bytes.Cut(line, []byte(":"))
 		if found {
 			sk := strings.TrimSpace(string(key))
@@ -50,19 +63,39 @@ func parseVarsHeader(header []byte, mV Vars) {
 			mV[sk] = sv
 		}
 	}
+	return mV
 }
 
 /*
-globals returns list of global OS environment variables that start
+GetEnvGlobals returns list of global OS environment variables that start
 with ZS_ prefix as Vars, so the values can be used inside templates
 */
-func globals() Vars {
-	vars := Vars{}
+func GetEnvGlobals() Vars {
+	ret := Vars{}
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
-		if strings.HasPrefix(pair[0], "ZS_") {
-			vars[strings.ToLower(pair[0][3:])] = pair[1]
+		if len(pair) < 2 {
+			continue
+		}
+		if !strings.HasPrefix(pair[0], "ZS_") {
+			continue
+		}
+		k := strings.TrimPrefix(pair[0], "ZS_")
+		if len(k) > 0 {
+			ret[strings.ToLower(k)] = pair[1]
 		}
 	}
-	return vars
+	// omit [ldelim, rdelim], since those are per-template
+	ret.ClearDelims()
+	return ret
+}
+
+func MergeVars(sv ...Vars) Vars {
+	ret := make(Vars)
+	for ix := range sv {
+		for k, v := range sv[ix] {
+			ret[k] = v
+		}
+	}
+	return ret
 }

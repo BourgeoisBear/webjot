@@ -3,14 +3,13 @@ package main
 import (
 	"bytes"
 	"fmt"
-	tp_html "html/template"
+	tHtml "html/template"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	tp_txt "text/template"
+	tText "text/template"
 	"time"
 
 	"github.com/yosssi/gcss"
@@ -25,113 +24,122 @@ type Builder struct {
 	ConfDir     string
 	DirMode     os.FileMode
 	FileMode    os.FileMode
-	Ldelim      string
-	Rdelim      string
 	Vdelim      string
 	IsShowVars  bool
 	IsTty       bool
 	IsWatchMode bool
 }
 
-/*
-returns list of variables defined in a text file and actual file
-content following the variables declaration.
-*/
-func (oB Builder) getVars(path string, mGlobals Vars) (
-	Vars, []byte, error,
+func textTemplate(mV Vars) *tText.Template {
+	return tText.New("").Delims(delimOvr(mV)).Funcs(funcMap(mV)).Option("missingkey=zero")
+}
+
+func htmlTemplate(mV Vars) *tHtml.Template {
+	return tHtml.New("").Delims(delimOvr(mV)).Funcs(funcMap(mV)).Option("missingkey=zero")
+}
+
+type LayoutMode uint8
+
+const (
+	NOLAYOUT LayoutMode = iota
+	LAYOUT
+)
+
+func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
+	DocProps, error,
 ) {
 
-	bsSrc, err := ioutil.ReadFile(path)
+	doc, err := GetDoc(path, oB.Vdelim)
 	if err != nil {
-		return nil, nil, err
+		return doc, err
 	}
 
-	// clone globals
-	mV := Vars{}
-	for name, value := range mGlobals {
-		mV[name] = value
+	// auto vars
+	doc.Vars["pubdir"] = oB.PubDir
+	doc.Vars["fname"] = filepath.Base(path)
+	doc.Vars["modified"] = doc.Info.ModTime().Format(time.RFC3339)
+	if oB.IsWatchMode {
+		doc.Vars["watchmode"] = "enabled"
 	}
 
-	// title from filename
-	fname := filepath.Base(path)
-	title := strings.TrimSuffix(fname, filepath.Ext(fname))
-	mV["title"] = strings.Title(title)
+	// layout control
+	switch mode {
+	case NOLAYOUT:
 
-	// split into header/body
-	header, body, found := bytes.Cut(bsSrc, []byte("\n"+oB.Vdelim+"\n"))
-	if !found {
-		return mV, bsSrc, nil
+		// no layout: merge-in doc vars (global < doc)
+		doc.Vars = MergeVars(vinit, doc.Vars)
+		delete(doc.Vars, "layout")
+
+	case LAYOUT:
+
+		if len(doc.Vars["layout"]) == 0 {
+			doc.Vars["layout"] = "layout.html"
+		}
+		pathLayout := filepath.Join(oB.ConfDir, doc.Vars["layout"])
+		dlay, err := GetDoc(pathLayout, oB.Vdelim)
+
+		if os.IsNotExist(err) {
+
+			// TODO: notify to STDERR if not found
+			// no layout: merge-in doc vars (global < doc)
+			doc.Vars = MergeVars(vinit, doc.Vars)
+			delete(doc.Vars, "layout")
+
+		} else if err != nil {
+
+			return doc, err
+
+		} else {
+
+			// merge vars (global < layout)
+			// create layout tmpl, get/set layout delims
+			dlay.Vars = MergeVars(vinit, dlay.Vars)
+			tmplLayout := htmlTemplate(dlay.Vars)
+			if tmplLayout, err = tmplLayout.Parse(string(dlay.Body)); err != nil {
+				return dlay, err
+			}
+			doc.Layout = tmplLayout
+
+			// clear delims from vars
+			// layout: merge-in doc vars (global < layout < doc)
+			dlay.Vars.ClearDelims()
+			doc.Vars = MergeVars(dlay.Vars, doc.Vars)
+		}
 	}
 
-	// parse vars from header
-	parseVarsHeader(header, mV)
-	return mV, body, nil
+	if oB.IsShowVars {
+		doc.Vars.PrettyPrint(os.Stdout, oB.IsTty)
+	}
+
+	return doc, nil
 }
 
-// TODO: vars header?
-func (oB Builder) applyLayout(content tp_html.HTML, iWri io.Writer, mV Vars) error {
-
-	relLayout := mV["layout"]
-	if len(relLayout) == 0 {
-		relLayout = "layout.html"
+func delimOvr(mV Vars) (string, string) {
+	l, r := "{{", "}}"
+	if v := mV["ldelim"]; len(v) > 0 {
+		l = v
 	}
-
-	// load layout
-	bsLayout, err := ioutil.ReadFile(filepath.Join(oB.ConfDir, relLayout))
-	if err != nil {
-		return err
+	if v := mV["rdelim"]; len(v) > 0 {
+		r = v
 	}
-
-	// create layout template
-	tmpl, err := tp_html.New("").
-		Delims(oB.delimOvr(mV)).
-		Funcs(funcMap(mV)).
-		Parse(string(bsLayout))
-	if err != nil {
-		return err
-	}
-
-	// clone vars
-	m := make(map[string]interface{}, len(mV))
-	for k, v := range mV {
-		m[k] = v
-	}
-	m["content"] = content
-
-	// render
-	return tmpl.Execute(iWri, m)
-}
-
-func (oB Builder) delimOvr(mV Vars) (string, string) {
-	l, r := oB.Ldelim, oB.Rdelim
-	/*
-		if v := mV["ldelim"]; len(v) > 0 {
-			l = v
-		}
-		if v := mV["rdelim"]; len(v) > 0 {
-			r = v
-		}
-	*/
 	return l, r
 }
 
-func (oB Builder) buildCSS(body []byte, iWri io.Writer, mV Vars, isGCSS bool) error {
+func (oB Builder) buildCSS(iWri io.Writer, doc DocProps, ext string) error {
 
 	// render vars
-	tmpl, err := tp_txt.New("").
-		Delims(oB.delimOvr(mV)).
-		Funcs(funcMap(mV)).
-		Parse(string(body))
+	tmpl := textTemplate(doc.Vars)
+	tmpl, err := tmpl.Parse(string(doc.Body))
 	if err != nil {
 		return err
 	}
 
 	var bufTmpl bytes.Buffer
-	if err = tmpl.Execute(&bufTmpl, mV); err != nil {
+	if err = tmpl.Execute(&bufTmpl, doc.Vars); err != nil {
 		return err
 	}
 
-	if isGCSS {
+	if ext == ".gcss" {
 		_, err = gcss.Compile(iWri, &bufTmpl)
 	} else {
 		_, err = io.Copy(iWri, &bufTmpl)
@@ -139,38 +147,35 @@ func (oB Builder) buildCSS(body []byte, iWri io.Writer, mV Vars, isGCSS bool) er
 	return err
 }
 
-func (oB Builder) buildHTML(body []byte, iWri io.Writer, mV Vars) error {
+func (oB Builder) buildHTML(iWri io.Writer, doc DocProps) error {
 
 	// render html
-	tmpl, err := tp_html.New("").
-		Delims(oB.delimOvr(mV)).
-		Funcs(funcMap(mV)).
-		Parse(string(body))
+	tmpl := htmlTemplate(doc.Vars)
+	tmpl, err := tmpl.Parse(string(doc.Body))
 	if err != nil {
 		return err
 	}
-	var strOut strings.Builder
-	if err = tmpl.Execute(&strOut, mV); err != nil {
+
+	var strOut bytes.Buffer
+	if err = tmpl.Execute(&strOut, doc.Vars); err != nil {
 		return err
 	}
 
 	// wrap inside layout
-	return oB.applyLayout(tp_html.HTML(strOut.String()), iWri, mV)
+	return doc.ApplyLayout(strOut.Bytes(), iWri)
 }
 
-func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
+func (oB Builder) buildMarkdown(iWri io.Writer, doc DocProps) error {
 
 	// render vars
-	tmpl, err := tp_txt.New("").
-		Delims(oB.delimOvr(mV)).
-		Funcs(funcMap(mV)).
-		Parse(string(body))
+	tmpl := textTemplate(doc.Vars)
+	tmpl, err := tmpl.Parse(string(doc.Body))
 	if err != nil {
 		return err
 	}
 
 	var bufTmpl bytes.Buffer
-	if err = tmpl.Execute(&bufTmpl, mV); err != nil {
+	if err = tmpl.Execute(&bufTmpl, doc.Vars); err != nil {
 		return err
 	}
 	// render markdown
@@ -189,16 +194,16 @@ func (oB Builder) buildMarkdown(body []byte, iWri io.Writer, mV Vars) error {
 		),
 	)
 
-	var strOut strings.Builder
+	var strOut bytes.Buffer
 	if err := md.Convert(bufTmpl.Bytes(), &strOut); err != nil {
 		return err
 	}
 
 	// wrap inside layout
-	return oB.applyLayout(tp_html.HTML(strOut.String()), iWri, mV)
+	return doc.ApplyLayout(strOut.Bytes(), iWri)
 }
 
-func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
+func (oB Builder) build(path string, iWri io.Writer) error {
 
 	var err error
 
@@ -244,38 +249,11 @@ func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
 
 	// extension renames
 	ext := strings.ToLower(filepath.Ext(path))
-	bGetVars := false
 	switch ext {
-	case ".md", ".mkd":
+	case ".md":
 		dst = strings.TrimSuffix(dst, ext) + ".html"
-		bGetVars = true
-	case ".html", ".xml":
-		bGetVars = true
-	case ".css":
-		bGetVars = true
 	case ".gcss":
 		dst = strings.TrimSuffix(dst, ext) + ".css"
-		bGetVars = true
-	}
-
-	// vars
-	var body []byte
-	if bGetVars {
-		mV, body, err = oB.getVars(path, mV)
-		if err != nil {
-			return err
-		}
-		mV["pubdir"] = oB.PubDir
-		mV["path"] = relpath
-		mV["fname"] = filepath.Base(path)
-		mV["modified"] = info.ModTime().Format(time.RFC3339)
-		if oB.IsWatchMode {
-			mV["watchmode"] = "enabled"
-		}
-
-		if oB.IsShowVars {
-			mV.PrettyPrint(os.Stdout, oB.IsTty)
-		}
 	}
 
 	// create output file
@@ -288,16 +266,29 @@ func (oB Builder) build(path string, iWri io.Writer, mV Vars) error {
 		iWri = out
 	}
 
+	vbase := GetEnvGlobals()
+	vbase["path"] = relpath
+
 	// build
 	switch ext {
-	case ".md", ".mkd":
-		return oB.buildMarkdown(body, iWri, mV)
+	case ".md":
+		dp, err := oB.getDocAndLayout(path, vbase, LAYOUT)
+		if err != nil {
+			return err
+		}
+		return oB.buildMarkdown(iWri, dp)
 	case ".html", ".xml":
-		return oB.buildHTML(body, iWri, mV)
-	case ".css":
-		return oB.buildCSS(body, iWri, mV, false)
-	case ".gcss":
-		return oB.buildCSS(body, iWri, mV, true)
+		dp, err := oB.getDocAndLayout(path, vbase, LAYOUT)
+		if err != nil {
+			return err
+		}
+		return oB.buildHTML(iWri, dp)
+	case ".gcss", ".css":
+		dp, err := oB.getDocAndLayout(path, vbase, NOLAYOUT)
+		if err != nil {
+			return err
+		}
+		return oB.buildCSS(iWri, dp, ext)
 	default:
 		fSrc, err := os.Open(path)
 		if err == nil {
@@ -354,8 +345,8 @@ func funcMap(mV Vars) map[string]interface{} {
 		"cmdText": func(cmd string, params ...string) string {
 			return runCmdMergedOutput(mV, cmd, params...)
 		},
-		"cmdHtml": func(cmd string, params ...string) tp_html.HTML {
-			return tp_html.HTML(runCmdMergedOutput(mV, cmd, params...))
+		"cmdHtml": func(cmd string, params ...string) tHtml.HTML {
+			return tHtml.HTML(runCmdMergedOutput(mV, cmd, params...))
 		},
 	}
 }
