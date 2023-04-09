@@ -20,7 +20,6 @@ func runCmd(mV Vars, cmd string, args ...string) (sout, serr []byte, err error) 
 	var errbuf, outbuf bytes.Buffer
 	c := exec.Command(cmd, args...)
 
-	// TODO: document env vars
 	// TODO: disambiguate upper/lower-cased vars
 	// TODO: force header to use env-var compatible keys
 	env := os.Environ()

@@ -125,6 +125,8 @@ So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
 TODO: layout.html documentation
 	* HTML_CONTENT
 	* layout: header
+
+TODO: built-in template funcs documentation
 ```
 
 **NOTE**: To ensure that live-refresh scripts are excluded from your final
