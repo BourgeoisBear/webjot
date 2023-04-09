@@ -28,13 +28,6 @@ func (doc *DocProps) ApplyLayout(bsContent []byte, iWri io.Writer) error {
 	}
 
 	/*
-		TODO: backport page/layout changes to `default_conf`
-		TODO: direct recursive copy of `default_conf`
-
-		TODO: test syntax breakages in "real life"
-
-		TODO: html/template: JS, CSS, et. al.
-
 		TODO: l/r delim var options
 			1. always ClearDelims, document ldelim/rdelim as unavailable in template
 			2. keep layout delims separately, restore on layout render

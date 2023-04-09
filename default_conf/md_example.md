@@ -9,9 +9,9 @@ rdelim: }}
 | Field      | Value             |
 | -----      | -----             |
 | title      | {{ .title }}      |
-| path       | {{ .path }}       |
-| fname      | {{ .fname }}      |
-| modified   | {{ .modified }}   |
-| watchmode  | {{ .watchmode }}  |
+| path       | {{ .PATH }}       |
+| fname      | {{ .FNAME }}      |
+| modified   | {{ .MODIFIED }}   |
+| watchmode  | {{ .WATCHMODE }}  |
 
 *NOTE*: Uses golang's text/template syntax.

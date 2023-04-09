@@ -1,8 +1,20 @@
-- generate index
-- document cmdText / cmdHtml
-- text template: .tmpl file?
+features:
+	- different prefix for env vars
+	- generate index
+	- markdown option flags
 
-- 'created by' message at bottom of default layout
-- different prefix for env vars
+correctness:
+	- html/template: JS, CSS, et. al. template funcs?
+	- force layout to be an html file
+	- better default header delim
+	- invalid header reporting ( non comment, no key )
+	- test syntax breakages in "real life"
 
-- markdown option flags
+documentation:
+	- vars handling / precedence
+	- cmdText / cmdHtml template funcs
+
+default site:
+	- direct recursive copy of `default_conf`
+	- 'created by' message at bottom of default layout
+

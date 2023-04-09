@@ -24,6 +24,36 @@ go install github.com/BourgeoisBear/webjot@latest
 | re-build site                        | `webjot <site_source_path>`        |
 | update site contents w/ live refresh | `webjot -watch <site_source_path>` |
 
+```
+DOC TODO:
+
+Templating Variables
+
+	- all environment-supplied variable names are lowercased after the prefix
+	- all header-supplied variable names are lowercased
+	- built-in variables are upper-case
+			PATH
+			FNAME
+			MODIFIED
+			WATCHMODE enabled/<blank>
+			HTML_CONTENT
+
+	- delimiters can be overridden on a per-file basis with the `ldelim` and
+	`rdelim` header keys
+
+	ldelim: <?
+	rdelim: ?>
+	---
+	content begins here...
+
+Variable Precedence
+
+	doc > layout > global
+
+	(i.e. if `my_var=one` is set in 'doc.md', and `my_var=two` is set in 'layout.html',
+	the `my_var` will be rendered as `one`.)
+
+```
 Keep your texts in markdown or HTML format, right in the main directory of your blog/site.  Keep all service files (extensions, layout pages, deployment scripts etc) in the `.webjot` subdirectory.
 
 Define variables in the header of the content files using:
