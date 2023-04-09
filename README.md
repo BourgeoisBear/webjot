@@ -113,7 +113,9 @@ inside shared `layouts`, and inside the `document` itself.  When the same
 variable name is used at different levels, the following precedence is
 observed:
 
-	`document` > `document's layout` > `environment variables`
+```
+	document > document's layout > environment variables
+```
 
 So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
 `three` inside `$ZS_MY_VAR`, `my_var` will be rendered as `one`.
