@@ -114,7 +114,7 @@ variable name is used at different levels, the following precedence is
 observed:
 
 ```
-	document > document's layout > environment variables
+document > document's layout > environment variables
 ```
 
 So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
@@ -125,7 +125,6 @@ So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
 TODO: layout.html documentation
 	* HTML_CONTENT
 	* layout: header
-
 ```
 
 **NOTE**: To ensure that live-refresh scripts are excluded from your final
