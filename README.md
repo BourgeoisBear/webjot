@@ -24,41 +24,14 @@ go install github.com/BourgeoisBear/webjot@latest
 | re-build site                        | `webjot <site_source_path>`        |
 | update site contents w/ live refresh | `webjot -watch <site_source_path>` |
 
-```
-DOC TODO:
-
-Templating Variables
-
-	- all environment-supplied variable names are lowercased after the prefix
-	- all header-supplied variable names are lowercased
-	- built-in variables are upper-case
-			PATH
-			FNAME
-			MODIFIED
-			WATCHMODE enabled/<blank>
-			HTML_CONTENT
-
-	- delimiters can be overridden on a per-file basis with the `ldelim` and
-	`rdelim` header keys
-
-	ldelim: <?
-	rdelim: ?>
-	@@@@@@@
-	content begins here...
-
-Variable Precedence
-
-	doc > layout > global
-
-	(i.e. if `my_var=one` is set in 'doc.md', and `my_var=two` is set in 'layout.html',
-	the `my_var` will be rendered as `one`.)
-
-```
-Keep your texts in markdown or HTML format, right in the main directory of your blog/site.  Keep all service files (extensions, layout pages, deployment scripts etc) in the `.webjot` subdirectory.
+Keep your texts in markdown or HTML format, right in the main directory of your
+blog/site.  Keep all service files (extensions, layout pages, deployment
+scripts etc) in the `<site>/.webjot` subdirectory.  Site will be rendered to the
+`<site>/.pub` subdirectory.
 
 Define variables in the header of the content files using:
 
-```
+```md
 title: My web site
 keywords: best website, hello, world
 @@@@@@@
@@ -67,31 +40,95 @@ keywords: best website, hello, world
 Markdown text goes after a header *separator*
 ```
 
-Use golang `text/template` syntax to access header variables and plugins in your markdown or html files, e.g. `{{ .title }}` or `{{ command arg1 arg2 }}`.
 
-Write extensions in any language you like and put them into the `.webjot` subdirectory.  Everything the extensions prints to stdout becomes the value of the placeholder.
+## Templating
 
-Every variable from the content header will be passed via environment variables like `title` becomes `$ZS_TITLE` and so on. There are some special variables:
+Use golang `text/template` syntax to access header variables and plugins in
+your markdown or html files, e.g. `{{ .title }}` or `{{ command arg1 arg2 }}`.
 
-**TODO**
+Write extensions in any language you like and put them into the `.webjot`
+subdirectory.  Everything the extensions prints to stdout becomes the value of
+the placeholder.
 
-To build your site:
+Every variable from the content header will be passed via environment variables
+like `title` becomes `$ZS_TITLE` and so on.
+
+
+## Variables
+
+Template variables can be specified as `Key: value` pairs inside an optional
+header block (all text preceding `@@@@@@@`).  All user-specified keys will be
+converted to lowercase prior to templating.
+
+```md
+
+TiTLe: My Markdown Document
+cateGorIes: examples, help
+auThoR: Jason Stewart
+@@@@@@@
+
+content begins here...
+
+# {{ .title }}
+### {{ .author }}
 
 ```
-webjot ./path_to_sources
+
+Webjot provides the following *built-in* / automatically-generated variables:
+
+| Template               | Shell Environment         | Example Value                                |
+| ---------------------- | ------------------------- | -------------                                |
+| `{{ .CONF_ROOT }}`     | `$ZS_CONF_ROOT`           | `/home/BourgeoisBear/webjot/content/.webjot` |
+| `{{ .FNAME }}`         | `$ZS_FNAME`               | `environment_vars.md`                        |
+| `{{ .MODIFIED }}`      | `$ZS_MODIFIED`            | `2023-04-09T03:43:31-04:00`                  |
+| `{{ .PATH }}`          | `$ZS_PATH`                | `subdir/environment_vars.md`                 |
+| `{{ .PUB_ROOT }}`      | `$ZS_PUB_ROOT`            | `/home/BourgeoisBear/webjot/content/.pub`    |
+| `{{ .SRC_ROOT }}`      | `$ZS_SRC_ROOT`            | `/home/BourgeoisBear/webjot/content`         |
+| `{{ .WATCHMODE }}`     | `$ZS_WATCHMODE`           | `enabled` (blank if disabled)                |
+
+For templating purposes, built-ins are always `UPPERCASE`, and user-defined
+variables are always `lowercase`.
+
+
+### Delimiter Overrides
+
+Delimiters may be overridden on a per-file basis with the `ldelim` and `rdelim` header keys:
+
+```md
+
+ldelim: <?
+rdelim: ?>
+title: Delimiter Override Example
+@@@@@@@
+# <? .title ?>
+My markdown content...
+
 ```
 
-The site will be rendered to the `./path_to_sources/.pub` subdirectory.
 
-For live-reloading during site development, try `webjot` in *watch mode*:
+### Variable Precedence
+
+Variables can be specified globally through shell `environment variables`,
+inside shared `layouts`, and inside the `document` itself.  When the same
+variable name is used at different levels, the following precedence is
+observed:
+
+	`document` > `document's layout` > `environment variables`
+
+So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
+`three` inside `$ZS_MY_VAR`, `my_var` will be rendered as `one`.
+
 
 ```
-webjot -watch ./path_to_sources
+TODO: layout.html documentation
+	* HTML_CONTENT
+	* layout: header
+
 ```
 
-A browser should open to your `.pub` subdirectory.  Each file will live-reload as you make changes to its source.
+**NOTE**: To ensure that live-refresh scripts are excluded from your final
+pages, be sure to re-build *without* the `-watch` flag prior to publication.
 
-**NOTE**: To ensure that live-refresh scripts are excluded from your final pages, be sure to re-build *without* the `-watch` flag prior to publication.
 
 ## CLI Help
 
