@@ -33,16 +33,16 @@ Template variables can be defined as environment variables (prefixed with
 `ZS_`) prior to invocation, and at the top of each content file in `Key: Value`
 format, followed by the default header terminator (`@@@@@@@`):
 
-Define key-value pairs in the header of the content files:
-
 ```md
-title: My web site
+title: My Website
 # this is a comment
 keywords: best website, hello, world
 @@@@@@@
 
 # {{ .title }}
-Markdown text goes after a header *separator*
+
+This is my website content.
+
 ```
 
 
