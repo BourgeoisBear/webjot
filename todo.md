@@ -1,11 +1,9 @@
 features:
-	- different prefix for env vars
 	- generate index
 	- markdown option flags
 
 correctness:
-	- invalid header checking/reporting ( non comment, no key ) on parse
-		- env vars must be alpha-numeric + underscore, cannot start with number
+	- invalid header checking/reporting ( non comment, no key, not envvar compatible [A-Z][a-z]_ ) on parse
 
 documentation:
 	- cmdRaw / cmdHtmlEncoded template funcs

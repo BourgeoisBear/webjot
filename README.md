@@ -27,12 +27,17 @@ go install github.com/BourgeoisBear/webjot@latest
 Keep your texts in markdown or HTML format, right in the main directory of your
 blog/site `<site>`.  Keep all service files (extensions, layout pages, deployment
 scripts etc) in the `<site>/.webjot` subdirectory.  Site will be rendered to the
-`<site>/.pub` subdirectory.
+`<site>/.pub` subdirectory using Go's `text/template` syntax.
 
-Define variables in the header of the content files using:
+Template variables can be defined as environment variables (prefixed with
+`ZS_`) prior to invocation, and at the top of each content file in `Key: Value`
+format, followed by the default header terminator (`@@@@@@@`):
+
+Define key-value pairs in the header of the content files:
 
 ```md
 title: My web site
+# this is a comment
 keywords: best website, hello, world
 @@@@@@@
 
