@@ -1,4 +1,4 @@
-module github.com/zserge/zs
+module github.com/BourgeoisBear/webjot
 
 go 1.19
 
