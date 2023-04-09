@@ -56,7 +56,7 @@ like `title` becomes `$ZS_TITLE` and so on.
 
 ## Variables
 
-Template variables can be specified as `Key: value` pairs inside an optional
+Template variables may be specified as `Key: value` pairs inside an optional
 header block (all text preceding `@@@@@@@`).  All user-specified keys will be
 converted to lowercase prior to templating.
 
@@ -108,7 +108,7 @@ My markdown content...
 
 ### Variable Precedence
 
-Variables can be specified globally through shell `environment variables`,
+Variables may be specified globally through shell `environment variables`,
 inside shared `layouts`, and inside the `document` itself.  When the same
 variable name is used at different levels, the following precedence is
 observed:
