@@ -23,6 +23,7 @@ const (
 	CFGDIR        = ".webjot"
 	PUBDIR        = ".pub"
 	DEFAULT_DELIM = "@@@@@@@"
+	ENVVAR_PREFIX = "ZS_"
 )
 
 //go:embed all:default_conf
@@ -192,6 +193,9 @@ func main() {
 	var err error
 	defer func() {
 		errRpt(err, bIsTty)
+		if err != nil {
+			os.Exit(1)
+		}
 	}()
 
 	oB := Builder{
@@ -200,7 +204,8 @@ func main() {
 		IsTty:    bIsTty,
 	}
 
-	flag.StringVar(&oB.Vdelim, "vdelim", DEFAULT_DELIM, "vars/body delimiter")
+	var szDelim string
+	flag.StringVar(&szDelim, "vdelim", DEFAULT_DELIM, "vars/body delimiter")
 	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show per-page render vars on build")
 
 	var httpPort int
@@ -246,6 +251,15 @@ EXAMPLES
 	}
 	flag.Parse()
 	args := flag.Args()
+
+	if len(szDelim) == 0 {
+		err = errors.New("empty vars/body delimiter")
+		return
+	} else {
+		if err = oB.SetHdrDelim(szDelim); err != nil {
+			return
+		}
+	}
 
 	var tgt string
 	if len(args) > 0 {

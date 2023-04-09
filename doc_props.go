@@ -48,7 +48,7 @@ retrieves file contents.  splits at first headerDelim.  parses text above header
 
 if no headerDelim is found, full contents are returned in DocProps.Body.
 */
-func GetDoc(path, headerDelim string) (DocProps, error) {
+func GetDoc(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
 
 	ret := DocProps{Path: path, Vars: make(Vars)}
 	pf, err := os.Open(path)
@@ -67,14 +67,14 @@ func GetDoc(path, headerDelim string) (DocProps, error) {
 		return ret, err
 	}
 
+	// skip header/body processing on empty delimiter
+	if rxHdrDelim == nil {
+		return ret, nil
+	}
+
 	// find `headerDelim`
 	// NOTE: deferring CR/CR-LF/first-line/last-line handling to regexp
-	hdrPat := `(?:^|\r?\n)` + regexp.QuoteMeta(headerDelim) + `(?:$|\r?\n)`
-	rx, err := regexp.Compile(hdrPat)
-	if err != nil {
-		return ret, err
-	}
-	hdrPos := rx.FindIndex(ret.Body)
+	hdrPos := rxHdrDelim.FindIndex(ret.Body)
 
 	// not found, leave body as-is
 	if hdrPos == nil {

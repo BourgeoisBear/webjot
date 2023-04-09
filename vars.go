@@ -68,7 +68,7 @@ func ParseHeaderVars(header []byte) Vars {
 
 /*
 GetEnvGlobals returns list of global OS environment variables that start
-with ZS_ prefix as Vars, so the values can be used inside templates
+with ENVVAR_PREFIX as Vars, so the values can be used inside templates
 */
 func GetEnvGlobals() Vars {
 	ret := Vars{}
@@ -77,10 +77,10 @@ func GetEnvGlobals() Vars {
 		if len(pair) < 2 {
 			continue
 		}
-		if !strings.HasPrefix(pair[0], "ZS_") {
+		if !strings.HasPrefix(pair[0], ENVVAR_PREFIX) {
 			continue
 		}
-		k := strings.TrimPrefix(pair[0], "ZS_")
+		k := strings.TrimPrefix(pair[0], ENVVAR_PREFIX)
 		if len(k) > 0 {
 			ret[strings.ToLower(k)] = pair[1]
 		}

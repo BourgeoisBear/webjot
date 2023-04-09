@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,10 +22,25 @@ type Builder struct {
 	ConfDir     string
 	DirMode     os.FileMode
 	FileMode    os.FileMode
-	Vdelim      string
 	IsShowVars  bool
 	IsTty       bool
 	IsWatchMode bool
+
+	rxHdrDelim *regexp.Regexp
+}
+
+func (oB *Builder) SetHdrDelim(headerDelim string) (err error) {
+	if len(headerDelim) == 0 {
+		oB.rxHdrDelim = nil
+	} else {
+		hdrPat := `(?:^|\r?\n)` + regexp.QuoteMeta(headerDelim) + `(?:$|\r?\n)`
+		oB.rxHdrDelim, err = regexp.Compile(hdrPat)
+	}
+	return
+}
+
+func (oB *Builder) GetHdrDelim() *regexp.Regexp {
+	return oB.rxHdrDelim
 }
 
 type LayoutMode uint8
@@ -38,12 +54,15 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 	DocProps, error,
 ) {
 
-	doc, err := GetDoc(path, oB.Vdelim)
+	doc, err := GetDoc(path, oB.rxHdrDelim)
 	if err != nil {
 		return doc, err
 	}
 
 	// auto vars
+	doc.Vars["SRC_ROOT"] = filepath.Dir(oB.ConfDir)
+	doc.Vars["PUB_ROOT"] = oB.PubDir
+	doc.Vars["CONF_ROOT"] = oB.ConfDir
 	doc.Vars["FNAME"] = filepath.Base(path)
 	doc.Vars["MODIFIED"] = doc.Info.ModTime().Format(time.RFC3339)
 	if oB.IsWatchMode {
@@ -64,7 +83,7 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 			doc.Vars["layout"] = "layout.html"
 		}
 		pathLayout := filepath.Join(oB.ConfDir, doc.Vars["layout"])
-		dlay, err := GetDoc(pathLayout, oB.Vdelim)
+		dlay, err := GetDoc(pathLayout, oB.rxHdrDelim)
 
 		if os.IsNotExist(err) {
 

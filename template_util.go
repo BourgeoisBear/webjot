@@ -12,18 +12,20 @@ import (
 
 /*
 run executes a command or a script. Vars define the command environment,
-each var is converted into OS environemnt variable with ZS_ prefix
-prepended.  Additional variable $ZS contains path to the binary. Command
-stderr is printed to stderr, command output is returned as a string.
+each var is converted into OS environemnt variable with ENVVAR_PREFIX
+prepended.
 */
 func runCmd(mV Vars, cmd string, args ...string) (sout, serr []byte, err error) {
 
 	var errbuf, outbuf bytes.Buffer
 	c := exec.Command(cmd, args...)
 
+	// TODO: document env vars
+	// TODO: disambiguate upper/lower-cased vars
+	// TODO: force header to use env-var compatible keys
 	env := os.Environ()
 	for k, v := range mV {
-		env = append(env, "ZS_"+strings.ToUpper(k)+"="+v)
+		env = append(env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
 	}
 
 	c.Env = env

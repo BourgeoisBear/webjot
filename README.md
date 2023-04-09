@@ -73,12 +73,7 @@ Write extensions in any language you like and put them into the `.webjot` subdir
 
 Every variable from the content header will be passed via environment variables like `title` becomes `$ZS_TITLE` and so on. There are some special variables:
 
-| Env Var      | Description                                     |
-| -------      | -----------                                     |
-| `$ZS`        | a path to the `webjot` executable               |
-| `$ZS_OUTDIR` | a path to the directory with generated files    |
-| `$ZS_FILE`   | a path to the currently processed markdown file |
-| `$ZS_URL`    | a URL for the currently generated page          |
+**TODO**
 
 To build your site:
 
