@@ -2,9 +2,6 @@ features:
 	- generate index
 	- markdown option flags
 
-correctness:
-	- invalid header checking/reporting ( non comment, no key, not envvar compatible [A-Z][a-z]_ ) on parse
-
 documentation:
 	- cmdRaw / cmdHtmlEncoded template funcs
 	- header documentation in `-help` flag

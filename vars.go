@@ -47,6 +47,14 @@ append each found pair into mV
 */
 func ParseHeaderVars(header []byte) Vars {
 
+	/*
+		TODO:
+			- invalid header checking/reporting ( non comment, no key, not envvar
+			compatible [A-Z][a-z]_ ) on parse
+			- force header to use env-var compatible keys
+			- accept newlines
+			- handle \r\n
+	*/
 	lines := bytes.Split(header, []byte("\n"))
 	mV := make(Vars, len(lines))
 	for _, line := range lines {

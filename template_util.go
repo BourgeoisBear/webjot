@@ -8,7 +8,17 @@ import (
 	"os/exec"
 	"strings"
 	ttmpl "text/template"
+	"unicode"
 )
+
+func HasUcase(s string) bool {
+	for _, c := range s {
+		if unicode.IsUpper(c) {
+			return true
+		}
+	}
+	return false
+}
 
 /*
 run executes a command or a script. Vars define the command environment,
@@ -17,17 +27,23 @@ prepended.
 */
 func runCmd(mV Vars, cmd string, args ...string) (sout, serr []byte, err error) {
 
-	var errbuf, outbuf bytes.Buffer
 	c := exec.Command(cmd, args...)
 
-	// TODO: disambiguate upper/lower-cased vars
-	// TODO: force header to use env-var compatible keys
-	env := os.Environ()
+	// write user-defined vars first, built-in vars last,
+	// so that built-ins take precedence
+	c.Env = os.Environ()
 	for k, v := range mV {
-		env = append(env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
+		if !HasUcase(k) {
+			c.Env = append(c.Env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
+		}
+	}
+	for k, v := range mV {
+		if HasUcase(k) {
+			c.Env = append(c.Env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
+		}
 	}
 
-	c.Env = env
+	var errbuf, outbuf bytes.Buffer
 	c.Stdout = &outbuf
 	c.Stderr = &errbuf
 
