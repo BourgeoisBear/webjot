@@ -32,13 +32,15 @@ func runCmd(mV Vars, cmd string, args ...string) (sout, serr []byte, err error) 
 	// write user-defined vars first, built-in vars last,
 	// so that built-ins take precedence
 	c.Env = os.Environ()
-	for k, v := range mV {
+	for k := range mV {
 		if !HasUcase(k) {
+			v := mV.GetStr(k)
 			c.Env = append(c.Env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
 		}
 	}
-	for k, v := range mV {
+	for k := range mV {
 		if HasUcase(k) {
+			v := mV.GetStr(k)
 			c.Env = append(c.Env, ENVVAR_PREFIX+strings.ToUpper(k)+"="+v)
 		}
 	}
@@ -81,11 +83,12 @@ func funcMap(mV Vars) map[string]interface{} {
 
 func delimOvr(mV Vars) (string, string) {
 	l, r := "{{", "}}"
-	if v := mV["ldelim"]; len(v) > 0 {
-		l = v
+	ol, or := mV.GetStr("ldelim"), mV.GetStr("rdelim")
+	if len(ol) > 0 {
+		l = ol
 	}
-	if v := mV["rdelim"]; len(v) > 0 {
-		r = v
+	if len(or) > 0 {
+		r = or
 	}
 	return l, r
 }

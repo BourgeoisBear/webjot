@@ -5,11 +5,41 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-type Vars map[string]string
+type VarPair struct {
+	K string
+	V interface{}
+}
+
+type Vars map[string]interface{}
+
+func (mV Vars) GetStr(k string) string {
+	if i := mV[k]; i != nil {
+		if s, ok := i.(string); ok {
+			return s
+		} else {
+			return fmt.Sprint(i)
+		}
+	}
+	return ""
+}
+
+func (mV Vars) GetPairs(bSort bool) []VarPair {
+	ret := make([]VarPair, 0, len(mV))
+	for k, v := range mV {
+		ret = append(ret, VarPair{K: k, V: v})
+	}
+	if bSort {
+		sort.Slice(ret, func(i, j int) bool {
+			return ret[i].K < ret[j].K
+		})
+	}
+	return ret
+}
 
 func (mV Vars) ClearDelims() {
 	delete(mV, "ldelim")
@@ -17,27 +47,28 @@ func (mV Vars) ClearDelims() {
 }
 
 func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
-
+	// get as a sorted array for consistent ordering
+	pairs := mV.GetPairs(true)
+	// find max key len
 	klen := 0
-	for k, _ := range mV {
-		l := len(k)
+	for _, p := range pairs {
+		l := len(p.K)
 		if l > klen {
 			klen = l
 		}
 	}
-
+	// construct format string from max key len
 	lblFmt := "%" + strconv.Itoa(klen) + "s"
 	if bColor {
 		lblFmt = "\x1b[92;1m" + lblFmt + "\x1b[0m"
 	}
-
-	for k, v := range mV {
-		_, err := fmt.Fprintf(iWri, "  "+lblFmt+": %s\n", k, v)
+	// write values
+	for _, p := range pairs {
+		_, err := fmt.Fprintf(iWri, "  "+lblFmt+": %+v\n", p.K, p.V)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 

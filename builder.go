@@ -79,11 +79,15 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 
 	case LAYOUT:
 
-		if len(doc.Vars["layout"]) == 0 {
-			doc.Vars["layout"] = "layout.html"
+		docLayout := doc.Vars.GetStr("layout")
+		if len(docLayout) == 0 {
+			docLayout = "layout.html"
+			doc.Vars["layout"] = docLayout
 		}
-		pathLayout := filepath.Join(oB.ConfDir, doc.Vars["layout"])
-		dlay, err := GetDoc(pathLayout, oB.rxHdrDelim)
+		dlay, err := GetDoc(
+			filepath.Join(oB.ConfDir, docLayout),
+			oB.rxHdrDelim,
+		)
 
 		if os.IsNotExist(err) {
 
