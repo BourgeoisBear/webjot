@@ -48,29 +48,43 @@ func (mV Vars) ClearDelims() {
 	delete(mV, "rdelim")
 }
 
-func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
+func (mV Vars) PrettyPrint(iWri io.Writer, nonConforming []string, bColor bool) error {
 	// get as a sorted array for consistent ordering
 	pairs := mV.GetPairs(true)
 	// find max key len
 	klen := 0
 	for _, p := range pairs {
-		l := len(p.K)
-		if l > klen {
+		if l := len(p.K); l > klen {
 			klen = l
 		}
 	}
 	// construct format string from max key len
-	lblFmt := "%" + strconv.Itoa(klen) + "s"
+	var AON, AOFF string
 	if bColor {
-		lblFmt = "\x1b[92;1m" + lblFmt + "\x1b[0m"
+		AON, AOFF = "\x1b[92;1m", "\x1b[0m"
 	}
-	// write values
+	// write conforming key:val pairs
 	for _, p := range pairs {
-		_, err := fmt.Fprintf(iWri, "  "+lblFmt+": %+v\n", p.K, p.V)
+		_, err := fmt.Fprintf(iWri,
+			"%s%"+strconv.Itoa(klen)+"s%s: %+v\n",
+			AON, p.K, AOFF, p.V,
+		)
 		if err != nil {
 			return err
 		}
 	}
+	// write non-conforming keys
+	if len(nonConforming) > 0 {
+		if bColor {
+			AON = "\x1b[91;1m"
+		}
+		_, err := fmt.Fprintf(iWri,
+			"%sWARNING%s: non-conforming keys = %v\n",
+			AON, AOFF, nonConforming,
+		)
+		return err
+	}
+
 	return nil
 }
 
@@ -82,23 +96,25 @@ func init() {
 
 /*
 splits each line inside the header section into (key, value) pairs
-adds each found pair into a Vars map and returns it
+adds each found pair into a Vars map and returns it.
+
+any non-conforming keys are returned as []string.
 */
-func ParseHeaderVars(header []byte) (Vars, error) {
+func ParseHeaderVars(header []byte) (Vars, []string, error) {
 	// parse as YAML
 	ret := make(Vars)
 	if err := yaml.Unmarshal(header, &ret); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// drop all non-conforming keys
+	var sNC []string
 	for k := range ret {
 		if !rxEnvVarName.MatchString(k) {
-			// TODO: report issue to STDERR as prettyprint
-			fmt.Fprintf(os.Stderr, "INVALID HEADER KEY `%s`: OMITTING\n", k)
+			sNC = append(sNC, k)
 			delete(ret, k)
 		}
 	}
-	return ret, nil
+	return ret, sNC, nil
 }
 
 /*

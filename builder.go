@@ -79,11 +79,14 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 
 	case LAYOUT:
 
+		// default layout if not specified
 		docLayout := doc.Vars.GetStr("layout")
 		if len(docLayout) == 0 {
 			docLayout = "layout.html"
 			doc.Vars["layout"] = docLayout
 		}
+
+		// get layout doc & parse header
 		dlay, err := GetDoc(
 			filepath.Join(oB.ConfDir, docLayout),
 			oB.rxHdrDelim,
@@ -102,6 +105,11 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 
 		} else {
 
+			// append any non-conforming keys to main document
+			doc.NonConformingKeys = append(
+				doc.NonConformingKeys, dlay.NonConformingKeys...,
+			)
+
 			// merge vars (global < layout)
 			// create layout tmpl, get/set layout delims
 			dlay.Vars = MergeVars(vinit, dlay.Vars)
@@ -119,7 +127,7 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 	}
 
 	if oB.IsShowVars {
-		doc.Vars.PrettyPrint(os.Stdout, oB.IsTty)
+		doc.Vars.PrettyPrint(os.Stdout, doc.NonConformingKeys, oB.IsTty)
 	}
 
 	return doc, nil

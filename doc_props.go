@@ -8,11 +8,12 @@ import (
 )
 
 type DocProps struct {
-	Path   string
-	Info   os.FileInfo
-	Body   []byte
-	Vars   Vars
-	Layout *tmpl.Template
+	Path              string
+	Info              os.FileInfo
+	Body              []byte
+	Vars              Vars
+	Layout            *tmpl.Template
+	NonConformingKeys []string
 }
 
 /*
@@ -82,7 +83,7 @@ func GetDoc(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
 	}
 
 	// found, parse vars from header info
-	ret.Vars, err = ParseHeaderVars(ret.Body[:hdrPos[0]])
+	ret.Vars, ret.NonConformingKeys, err = ParseHeaderVars(ret.Body[:hdrPos[0]])
 	ret.Body = ret.Body[hdrPos[1]:]
 	return ret, err
 }
