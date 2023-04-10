@@ -5,7 +5,6 @@ documentation:
 
 features:
 	- SCRIPTS var
-	- windows testing
 	- generate index
 	- markdown option flags
 	- "l/r delim var options" in doc\_props.go
