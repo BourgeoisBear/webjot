@@ -1,13 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type VarPair struct {
@@ -73,41 +74,20 @@ func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
 }
 
 /*
-split each line inside the header section into (key, value) pairs
-append each found pair into mV
+splits each line inside the header section into (key, value) pairs
+adds each found pair into a Vars map and returns it
 */
-func ParseHeaderVars(header []byte) Vars {
+func ParseHeaderVars(header []byte) (Vars, error) {
 
-	/*
-		TODO:
-			- invalid header checking/reporting ( non comment, no key, not envvar
-			compatible [A-Z][a-z]_ ) on parse
-			- force header to use env-var compatible keys
-			- accept newlines
-			- handle \r\n
-	*/
-	lines := bytes.Split(header, []byte("\n"))
-	mV := make(Vars, len(lines))
-	for _, line := range lines {
-
-		// skip comment lines beginning with #
-		if bytes.HasPrefix(line, []byte("#")) {
-			continue
-		}
-
-		key, val, found := bytes.Cut(line, []byte(":"))
-		if found {
-			sk := strings.TrimSpace(string(key))
-			sv := strings.TrimSpace(string(val))
-			mV[sk] = sv
-		}
-	}
-	return mV
+	// TODO: drop all keys not matching [a-z0-9_]
+	mV := make(Vars)
+	err := yaml.Unmarshal(header, &mV)
+	return mV, err
 }
 
 /*
-GetEnvGlobals returns list of global OS environment variables that start
-with ENVVAR_PREFIX as Vars, so the values can be used inside templates
+returns global OS environment variables that start with ENVVAR_PREFIX as Vars,
+so the values can be used inside templates
 */
 func GetEnvGlobals() Vars {
 	ret := Vars{}

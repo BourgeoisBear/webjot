@@ -82,7 +82,7 @@ func GetDoc(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
 	}
 
 	// found, parse vars from header info
-	ret.Vars = ParseHeaderVars(ret.Body[:hdrPos[0]])
+	ret.Vars, err = ParseHeaderVars(ret.Body[:hdrPos[0]])
 	ret.Body = ret.Body[hdrPos[1]:]
-	return ret, nil
+	return ret, err
 }

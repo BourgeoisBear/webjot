@@ -8,6 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/yosssi/gcss v0.1.0
 	github.com/yuin/goldmark v1.5.4
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require golang.org/x/sys v0.6.0 // indirect

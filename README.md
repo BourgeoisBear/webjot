@@ -30,12 +30,11 @@ scripts etc) in the `<site>/.webjot` subdirectory.  Site will be rendered to the
 `<site>/.pub` subdirectory using Go's `text/template` syntax.
 
 Template variables can be defined as environment variables (prefixed with
-`ZS_`) prior to invocation, and at the top of each content file in `Key: Value`
+`ZS_`) prior to invocation, and at the top of each content file in YAML
 format, followed by the default header terminator (`@@@@@@@`):
 
 ```md
 title: My Website
-# this is a comment
 keywords: best website, hello, world
 @@@@@@@
 
@@ -61,15 +60,19 @@ like `title` becomes `$ZS_TITLE` and so on.
 
 ## Variables
 
-Template variables may be specified as `Key: value` pairs inside an optional
-header block (all text preceding `@@@@@@@`).  All user-specified keys will be
-converted to lowercase prior to templating.
+Template variables may be specified, in YAML format, from an optional header
+block (all text preceding `@@@@@@@`).  To preserve compatibility with
+*environment variables* and *built-ins*, all top-level keys *must* be
+completely lowercase and consist solely of letters `[a-z]`, numbers `[0-9]`,
+and underscores `[_]`.  Any keys which do not follow this naming standard will
+be discarded.
 
 ```md
 
-TiTLe: My Markdown Document
-cateGorIes: examples, help
-auThoR: Jason Stewart
+title: My Markdown Document
+categories: examples, help
+author: Jason Stewart
+WRONG: <discarded for being uppercase>
 @@@@@@@
 
 content begins here...
