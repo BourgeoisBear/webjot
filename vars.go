@@ -86,19 +86,19 @@ adds each found pair into a Vars map and returns it
 */
 func ParseHeaderVars(header []byte) (Vars, error) {
 	// parse as YAML
-	mV := make(Vars)
-	if err := yaml.Unmarshal(header, &mV); err != nil {
+	ret := make(Vars)
+	if err := yaml.Unmarshal(header, &ret); err != nil {
 		return nil, err
 	}
 	// drop all non-conforming keys
-	for k := range mV {
+	for k := range ret {
 		if !rxEnvVarName.MatchString(k) {
 			// TODO: report issue to STDERR as prettyprint
 			fmt.Fprintf(os.Stderr, "INVALID HEADER KEY `%s`: OMITTING\n", k)
-			delete(mV, k)
+			delete(ret, k)
 		}
 	}
-	return mV, nil
+	return ret, nil
 }
 
 /*
@@ -106,7 +106,7 @@ returns global OS environment variables that start with ENVVAR_PREFIX as Vars,
 so the values can be used inside templates
 */
 func GetEnvGlobals() Vars {
-	ret := Vars{}
+	ret := make(Vars)
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
 		if len(pair) < 2 {
