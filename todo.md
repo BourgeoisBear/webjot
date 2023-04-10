@@ -8,6 +8,5 @@ documentation:
 	- better example site
 
 default site:
-	- direct recursive copy of `default_conf`
 	- 'created by' message at bottom of default layout
 

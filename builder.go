@@ -94,7 +94,6 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 
 		if os.IsNotExist(err) {
 
-			// TODO: notify to STDERR if not found
 			// no layout: merge-in doc vars (global < doc)
 			doc.Vars = MergeVars(vinit, doc.Vars)
 			delete(doc.Vars, "layout")

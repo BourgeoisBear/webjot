@@ -27,7 +27,9 @@ const (
 )
 
 //go:embed all:default_conf
-var defaultSiteCfg embed.FS
+var SiteCfgFS embed.FS
+
+const SiteCfgDirName = "default_conf"
 
 func build2(oB Builder, path string, iWri io.Writer) error {
 	err := oB.build(path, iWri)
@@ -136,54 +138,45 @@ func initSite(oB Builder, tgtDir string) error {
 		return err
 	}
 
-	cfgDir := filepath.Join(tgtDir, CFGDIR)
-	if err = os.MkdirAll(cfgDir, oB.DirMode); err != nil {
-		return err
-	}
+	return fs.WalkDir(SiteCfgFS, SiteCfgDirName, func(src string, de fs.DirEntry, err error) error {
 
-	sD, err := defaultSiteCfg.ReadDir("default_conf")
-	if err != nil {
-		return err
-	}
+		// generate target path from source path
+		rel := filepath.FromSlash(strings.TrimPrefix(src, SiteCfgDirName))
+		dst := filepath.Join(tgtDir, rel)
 
-	for ix := range sD {
-
-		if sD[ix].IsDir() {
-			continue
+		// make directory
+		if de.IsDir() {
+			err := os.Mkdir(dst, oB.DirMode)
+			if os.IsExist(err) {
+				return nil
+			}
+			return err
 		}
-		fname := sD[ix].Name()
+
+		// report progress
+		fmt.Println(dst)
+
+		// open dst (file must not exist)
+		fDst, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL, oB.FileMode)
+		if err != nil {
+			if os.IsExist(err) {
+				err = errors.New("Init does not overwrite existing files.  Operation terminated.")
+			}
+			return err
+		}
+		defer fDst.Close()
 
 		// open src
-		fSrc, err := defaultSiteCfg.Open("default_conf/" + fname)
+		fSrc, err := SiteCfgFS.Open(src)
 		if err != nil {
 			return err
 		}
 		defer fSrc.Close()
 
-		// determine dst dir
-		dstDir := tgtDir
-		if fname == "layout.html" {
-			dstDir = cfgDir
-		}
-
-		// open dst
-		fDst, err := os.OpenFile(
-			filepath.Join(dstDir, fname),
-			os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
-			oB.FileMode,
-		)
-		if err != nil {
-			return err
-		}
-		defer fDst.Close()
-
 		// copy from src to dst
-		if _, err = io.Copy(fDst, fSrc); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		_, err = io.Copy(fDst, fSrc)
+		return err
+	})
 }
 
 func main() {
