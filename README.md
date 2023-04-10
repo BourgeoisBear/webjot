@@ -83,18 +83,6 @@ content begins here...
 
 ```
 
-Webjot provides the following *built-in* / automatically-generated variables:
-
-| Template               | Shell Environment         | Example Value                     |
-| ---------------------- | ------------------------- | -------------                     |
-| `{{ .SRC_ROOT }}`      | `$ZS_SRC_ROOT`            | /home/user/webjot/content         |
-| `{{ .PUB_ROOT }}`      | `$ZS_PUB_ROOT`            | /home/user/webjot/content/.pub    |
-| `{{ .CONF_ROOT }}`     | `$ZS_CONF_ROOT`           | /home/user/webjot/content/.webjot |
-| `{{ .FNAME }}`         | `$ZS_FNAME`               | environment\_vars.md              |
-| `{{ .PATH }}`          | `$ZS_PATH`                | subdir/environment\_vars.md       |
-| `{{ .MODIFIED }}`      | `$ZS_MODIFIED`            | 2023-04-09T03:43:31-04:00         |
-| `{{ .WATCHMODE }}`     | `$ZS_WATCHMODE`           | enabled (blank if disabled)       |
-
 For templating purposes, built-ins are always `UPPERCASE`, and user-defined
 variables are always `lowercase`.
 
