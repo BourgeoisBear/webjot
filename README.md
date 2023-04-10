@@ -62,10 +62,10 @@ like `title` becomes `$ZS_TITLE` and so on.
 
 Template variables may be specified, in YAML format, from an optional header
 block (all text preceding `@@@@@@@`).  To preserve compatibility with
-*environment variables* and *built-ins*, all top-level keys *must* be
-completely lowercase and consist solely of letters `[a-z]`, numbers `[0-9]`,
-and underscores `[_]`.  Any keys which do not follow this naming standard will
-be discarded.
+*environment variables* and *built-ins*, all top-level keys must consist solely
+of *lowercase* letters `[a-z]`, numbers `[0-9]`, underscores `[_]`, and not
+begin with a number.  Any keys which do not follow this naming standard will be
+discarded.
 
 ```md
 
@@ -73,6 +73,7 @@ title: My Markdown Document
 categories: examples, help
 author: Jason Stewart
 WRONG: <discarded for being uppercase>
+1variable: <discarded for starting with a number>
 @@@@@@@
 
 content begins here...

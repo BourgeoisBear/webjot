@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,16 +74,31 @@ func (mV Vars) PrettyPrint(iWri io.Writer, bColor bool) error {
 	return nil
 }
 
+var rxEnvVarName *regexp.Regexp
+
+func init() {
+	rxEnvVarName = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
+}
+
 /*
 splits each line inside the header section into (key, value) pairs
 adds each found pair into a Vars map and returns it
 */
 func ParseHeaderVars(header []byte) (Vars, error) {
-
-	// TODO: drop all keys not matching [a-z0-9_]
+	// parse as YAML
 	mV := make(Vars)
-	err := yaml.Unmarshal(header, &mV)
-	return mV, err
+	if err := yaml.Unmarshal(header, &mV); err != nil {
+		return nil, err
+	}
+	// drop all non-conforming keys
+	for k := range mV {
+		if !rxEnvVarName.MatchString(k) {
+			// TODO: report issue to STDERR as prettyprint
+			fmt.Fprintf(os.Stderr, "INVALID HEADER KEY `%s`: OMITTING\n", k)
+			delete(mV, k)
+		}
+	}
+	return mV, nil
 }
 
 /*
