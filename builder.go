@@ -60,11 +60,12 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 	}
 
 	// auto vars
-	doc.Vars["SRC_ROOT"] = filepath.Dir(oB.ConfDir)
-	doc.Vars["PUB_ROOT"] = oB.PubDir
-	doc.Vars["CONF_ROOT"] = oB.ConfDir
-	doc.Vars["FNAME"] = filepath.Base(path)
+	doc.Vars["CFGDIR_NAME"] = CFGDIR
+	doc.Vars["PUBDIR_NAME"] = PUBDIR
+	doc.Vars["FILE_PATH"] = path
+	doc.Vars["FILE_NAME"] = filepath.Base(path)
 	doc.Vars["MODIFIED"] = doc.Info.ModTime().Format(time.RFC3339)
+	doc.Vars["SRC_ROOT"] = filepath.Dir(oB.ConfDir)
 	if oB.IsWatchMode {
 		doc.Vars["WATCHMODE"] = "enabled"
 	}
@@ -274,7 +275,7 @@ func (oB Builder) build(path string, iWri io.Writer) error {
 	}
 
 	vbase := GetEnvGlobals()
-	vbase["PATH"] = relpath
+	vbase["SITE_REL_PATH"] = filepath.ToSlash(relpath)
 
 	// build
 	switch ext {

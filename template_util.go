@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"html"
 	"os"
 	"os/exec"
 	"strings"
@@ -72,11 +71,8 @@ func runCmdMergedOutput(mV Vars, cmd string, args ...string) string {
 
 func funcMap(mV Vars) map[string]interface{} {
 	return map[string]interface{}{
-		"cmdRaw": func(cmd string, params ...string) string {
+		"doCmd": func(cmd string, params ...string) string {
 			return runCmdMergedOutput(mV, cmd, params...)
-		},
-		"cmdHtmlEncoded": func(cmd string, params ...string) string {
-			return html.EscapeString(runCmdMergedOutput(mV, cmd, params...))
 		},
 	}
 }

@@ -1,4 +1,4 @@
-title: HTML Example
+title: HTML Source Example
 author: Jason Stewart
 @@@@@@@
 
@@ -9,11 +9,9 @@ author: Jason Stewart
 		<th>Field</th>
 		<th>Value</th>
 	</tr>
-	<tr><td>title</td><td>{{ .title }}</td></tr>
-	<tr><td>path</td><td>{{ .PATH }}</td></tr>
-	<tr><td>fname</td><td>{{ .FNAME }}</td></tr>
-	<tr><td>modified</td><td>{{ .MODIFIED }}</td></tr>
-	<tr><td>watchmode</td><td>{{ .WATCHMODE }}</td></tr>
+	<tr><td>title</td><td>{{ html .title }}</td></tr>
+	<tr><td>path</td><td>{{ html .PATH }}</td></tr>
+	<tr><td>fname</td><td>{{ html .FNAME }}</td></tr>
+	<tr><td>modified</td><td>{{ html .MODIFIED }}</td></tr>
+	<tr><td>watchmode</td><td>{{ html .WATCHMODE }}</td></tr>
 </table>
-
-<p><i>NOTE</i>: Uses golang's text/template syntax.</p>

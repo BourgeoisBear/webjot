@@ -1,3 +1,5 @@
+domain: cryptoddns.net
+@@@@@@@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 	<head>
@@ -5,14 +7,14 @@
 		<meta name="viewport"            content="width=device-width, initial-scale=1"/>
 		<link rel="stylesheet" type="text/css" href="/style.css"/>
 		{{ if .WATCHMODE }}<script src="/live.js"></script>{{ end }}
-		<title>{{ .title }}</title>
+		<title>{{ html .title }}</title>
 	</head>
 	<body>
 		<article>
-			{{ if .title }}<h1>{{ .title }}</h1>{{ end }}
+			{{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
 			{{ .HTML_CONTENT }}
 		</article>
 		<hr />
-		<div class="contact"><a href="https://cryptoddns.net">cryptoddns.net</a></div>
+		<div class="contact"><a href="https://{{ .domain }}">{{ .domain }}</a></div>
 	</body>
 </html>
