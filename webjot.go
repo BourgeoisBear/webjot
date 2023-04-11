@@ -199,7 +199,7 @@ func main() {
 
 	var szDelim string
 	flag.StringVar(&szDelim, "vdelim", DEFAULT_DELIM, "vars/body delimiter")
-	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show per-page render vars on build")
+	flag.BoolVar(&oB.IsShowVars, "vshow", false, "show document vars for file(s) on build")
 
 	var httpPort int
 	flag.BoolVar(&oB.IsWatchMode, "watch", false, "rebuild on file change")
