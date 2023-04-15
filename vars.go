@@ -50,7 +50,17 @@ func (mV Vars) ClearDelims() {
 
 func (mV Vars) PrettyPrint(iWri io.Writer, nonConforming []string, bColor bool) error {
 	// get as a sorted array for consistent ordering
-	pairs := mV.GetPairs(true)
+	allPairs := mV.GetPairs(true)
+	// skip vars that are the same for all files
+	pairs := make([]VarPair, 0, len(allPairs))
+	for _, p := range allPairs {
+		switch p.K {
+		case "CFGDIR", "PUBDIR", "SRCDIR", "WATCHMODE":
+			continue
+		default:
+			pairs = append(pairs, p)
+		}
+	}
 	// find max key len
 	klen := 0
 	for _, p := range pairs {

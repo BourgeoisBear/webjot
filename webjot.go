@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -31,80 +30,40 @@ var SiteCfgFS embed.FS
 
 const SiteCfgDirName = "default_conf"
 
-func build2(oB Builder, path string, iWri io.Writer) error {
-	err := oB.build(path, iWri)
-	if err != nil && err != fs.SkipDir {
-		err = errors.WithMessage(err, path)
-	}
-	return err
-}
-
-func buildAll(oB Builder, srcDir string) error {
+func buildAll(oB Builder, srcDir string) (Layouts, error) {
+	mLayouts := make(Layouts)
 	// recurse through source dir
-	wdFunc := func(path string, info fs.DirEntry, eWalk error) error {
+	wdFunc := func(path string, info fs.DirEntry, eWalk error) (eout error) {
+		defer func() {
+			if eout != nil && eout != fs.SkipDir {
+				eout = errors.WithMessage(eout, path)
+			}
+		}()
 		if eWalk != nil {
-			return errors.WithMessage(eWalk, path)
+			eout = eWalk
 		} else {
-			return build2(oB, path, nil)
+			mLayouts, eout = oB.build(path, info, mLayouts)
 		}
+		return
 	}
-	return filepath.WalkDir(srcDir, wdFunc)
+	return mLayouts, filepath.WalkDir(srcDir, wdFunc)
 }
 
+/*
+watches for changes to source and config files
+re-builds on change
+NOTE: blocking channel-select loop
+*/
 func watch(oB Builder, srcDir string) error {
 
-	// create new watcher
-	watcher, err := fsnotify.NewWatcher()
+	// create new pW
+	pW, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
+	defer pW.Close()
 
-	// listen for events
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-
-		defer wg.Done()
-
-		for {
-			select {
-			case evt, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				// rebuild file
-				if evt.Has(fsnotify.Write) {
-
-					modDir := filepath.Dir(evt.Name)
-
-					// skip PubDir changes
-					if filepath.HasPrefix(modDir, oB.PubDir) {
-						break
-					}
-
-					fmt.Println(evt)
-
-					var e2 error
-					if filepath.HasPrefix(modDir, oB.ConfDir) {
-						// rebuild all on ConfDir changes
-						e2 = buildAll(oB, filepath.Dir(oB.ConfDir))
-					} else {
-						// otherwise, rebuild dirty file only
-						e2 = build2(oB, evt.Name, nil)
-					}
-					errRpt(e2, oB.IsTty)
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				errRpt(err, oB.IsTty)
-			}
-		}
-	}()
-
-	// add dirs to watch
+	// add src dirs to watch
 	err = filepath.WalkDir(
 		srcDir,
 		func(src string, info fs.DirEntry, err error) error {
@@ -115,19 +74,56 @@ func watch(oB Builder, srcDir string) error {
 			if !info.IsDir() || strings.HasPrefix(info.Name(), ".") {
 				return nil
 			}
-			return watcher.Add(src)
+			return pW.Add(src)
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	// add conf dir
-	if err = watcher.Add(oB.ConfDir); err != nil {
+	// add conf dir to watch
+	if err = pW.Add(oB.ConfDir); err != nil {
 		return err
 	}
 
-	wg.Wait()
+	// listen for events
+	for {
+		select {
+		case evt, ok := <-pW.Events:
+			if !ok {
+				return nil
+			}
+			// rebuild file
+			if evt.Has(fsnotify.Write) {
+
+				modDir := filepath.Dir(evt.Name)
+
+				// skip PubDir changes
+				if filepath.HasPrefix(modDir, oB.PubDir) {
+					break
+				}
+
+				fmt.Println(evt)
+
+				// parse doc templates
+				mLayout, e2 := buildAll(oB, filepath.Dir(oB.ConfDir))
+				if e2 != nil {
+					errRpt(e2, oB.IsTty)
+				} else {
+					// parse layouts, render nested templates
+					oB.ApplyLayouts(mLayout, func(err error, msg string) {
+						errRpt(errors.WithMessage(err, msg), oB.IsTty)
+					})
+				}
+			}
+		case err, ok := <-pW.Errors:
+			errRpt(err, oB.IsTty)
+			if !ok {
+				return nil
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -290,14 +286,13 @@ EXAMPLES
 		}
 	}
 
-	// prepend CFGDIR to $PATH, so plugins will be found before OS commands
-	// p := os.Getenv("PATH")
-	// p = ZSDIR + ":" + p
-	// os.Setenv("PATH", p)
-
-	if err = buildAll(oB, tgt); err != nil {
+	mLayout, err := buildAll(oB, tgt)
+	if err != nil {
 		return
 	}
+	oB.ApplyLayouts(mLayout, func(err error, msg string) {
+		errRpt(errors.WithMessage(err, msg), oB.IsTty)
+	})
 
 	if oB.IsWatchMode {
 

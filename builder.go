@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	tmpl "text/template"
 	"time"
 
 	"github.com/yosssi/gcss"
@@ -29,6 +31,13 @@ type Builder struct {
 	rxHdrDelim *regexp.Regexp
 }
 
+type Doc struct {
+	DocProps
+	Body []byte
+}
+
+type Layouts map[string][]Doc
+
 func (oB *Builder) SetHdrDelim(headerDelim string) (err error) {
 	if len(headerDelim) == 0 {
 		oB.rxHdrDelim = nil
@@ -43,87 +52,32 @@ func (oB *Builder) GetHdrDelim() *regexp.Regexp {
 	return oB.rxHdrDelim
 }
 
-type LayoutMode uint8
-
-const (
-	NOLAYOUT LayoutMode = iota
-	LAYOUT
-)
-
-func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
-	DocProps, error,
-) {
+func (oB Builder) getDocAndAutoVars(path string) (DocProps, error) {
 
 	doc, err := GetDoc(path, oB.rxHdrDelim)
 	if err != nil {
 		return doc, err
 	}
 
-	// auto vars
-	doc.Vars["CFGDIR_NAME"] = CFGDIR
-	doc.Vars["PUBDIR_NAME"] = PUBDIR
-	doc.Vars["FILE_PATH"] = path
-	doc.Vars["FILE_NAME"] = filepath.Base(path)
-	doc.Vars["MODIFIED"] = doc.Info.ModTime().Format(time.RFC3339)
-	doc.Vars["SRC_ROOT"] = filepath.Dir(oB.ConfDir)
-	if oB.IsWatchMode {
-		doc.Vars["WATCHMODE"] = "enabled"
+	// get relative path of dst
+	dstRel, err := oB.SrcPath2DstRel(path)
+	if err != nil {
+		return doc, err
 	}
 
-	// layout control
-	switch mode {
-	case NOLAYOUT:
+	// set absolute path of dst
+	doc.DstPath = filepath.Join(oB.PubDir, dstRel)
 
-		// no layout: merge-in doc vars (global < doc)
-		doc.Vars = MergeVars(vinit, doc.Vars)
-		delete(doc.Vars, "layout")
-
-	case LAYOUT:
-
-		// default layout if not specified
-		docLayout := doc.Vars.GetStr("layout")
-		if len(docLayout) == 0 {
-			docLayout = "layout.html"
-			doc.Vars["layout"] = docLayout
-		}
-
-		// get layout doc & parse header
-		dlay, err := GetDoc(
-			filepath.Join(oB.ConfDir, docLayout),
-			oB.rxHdrDelim,
-		)
-
-		if os.IsNotExist(err) {
-
-			// no layout: merge-in doc vars (global < doc)
-			doc.Vars = MergeVars(vinit, doc.Vars)
-			delete(doc.Vars, "layout")
-
-		} else if err != nil {
-
-			return doc, err
-
-		} else {
-
-			// append any non-conforming keys to main document
-			doc.NonConformingKeys = append(
-				doc.NonConformingKeys, dlay.NonConformingKeys...,
-			)
-
-			// merge vars (global < layout)
-			// create layout tmpl, get/set layout delims
-			dlay.Vars = MergeVars(vinit, dlay.Vars)
-			tmplLayout := textTemplate(dlay.Vars)
-			if tmplLayout, err = tmplLayout.Parse(string(dlay.Body)); err != nil {
-				return dlay, err
-			}
-			doc.Layout = tmplLayout
-
-			// clear delims from vars
-			// layout: merge-in doc vars (global < layout < doc)
-			dlay.Vars.ClearDelims()
-			doc.Vars = MergeVars(dlay.Vars, doc.Vars)
-		}
+	// auto vars
+	doc.Vars["URI_PATH"] = filepath.ToSlash(dstRel)
+	doc.Vars["CFGDIR"] = oB.ConfDir
+	doc.Vars["SRC"] = path
+	doc.Vars["SRCMOD"] = doc.Info.ModTime().Format(time.RFC3339)
+	srcRoot := filepath.Dir(oB.ConfDir)
+	doc.Vars["SRCDIR"] = srcRoot
+	doc.Vars["PUBDIR"] = filepath.Join(srcRoot, PUBDIR)
+	if oB.IsWatchMode {
+		doc.Vars["WATCHMODE"] = "enabled"
 	}
 
 	if oB.IsShowVars {
@@ -133,20 +87,155 @@ func (oB Builder) getDocAndLayout(path string, vinit Vars, mode LayoutMode) (
 	return doc, nil
 }
 
-func (oB Builder) buildCSS(iWri io.Writer, doc DocProps, ext string) error {
+// TODO: snippets? (parts which can be included on various pages
+// TODO: separate modules?
 
-	// render vars
-	tmpl := textTemplate(doc.Vars)
-	tmpl, err := tmpl.Parse(string(doc.Body))
+/*
+TODO: markdown pass-through
+
+  - need a way to have goldmark leave items between {{ and }} untouched
+  - switch back to html/template?
+*/
+type ErrFunc func(err error, msg string)
+
+/*
+Parse given layout templates.
+Nest pre-parsed document templates.
+Render nested templates.
+*/
+func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
+
+	vinit := GetEnvGlobals()
+
+	// iterate layouts
+	for docLayout, sDocs := range mLayout {
+
+		// skip layout application when not supplied
+		if len(docLayout) == 0 {
+			// TODO: in single-template-render mode,
+			//       this will also need to template.Exec()
+			for _, doc := range sDocs {
+				if err := oB.copyToDst(&doc); err != nil {
+					fnErr(err, doc.SrcPath)
+				}
+			}
+			continue
+		}
+
+		// get layout & layout header
+		layoutSrc := filepath.Join(oB.ConfDir, docLayout)
+		progressIndicator(docLayout+" (LAYOUT)", oB.IsTty)
+		dlay, eLayout := GetDoc(layoutSrc, oB.rxHdrDelim)
+		if eLayout != nil {
+			fnErr(eLayout, layoutSrc)
+			continue
+		}
+
+		if oB.IsShowVars {
+			dlay.Vars.PrettyPrint(os.Stdout, dlay.NonConformingKeys, oB.IsTty)
+		}
+
+		// merge vars (global < layout)
+		dlay.Vars = MergeVars(vinit, dlay.Vars)
+
+		// create layout tmpl, get/set layout delims
+		tmplLayout := textTemplate(dlay.Vars)
+		tmplLayout, eLayout = tmplLayout.Parse(string(dlay.Source))
+		if eLayout != nil {
+			fnErr(eLayout, layoutSrc)
+			continue
+		}
+
+		// clear delims from vars
+		dlay.Vars.ClearDelims()
+
+		// TODO: pass-in all pages and per-layout pages as separate map items
+		for _, doc := range sDocs {
+			if e2 := oB.applyLayoutToDoc(tmplLayout, &doc); e2 != nil {
+				fnErr(e2, doc.SrcPath)
+			}
+		}
+	}
+}
+
+func (oB Builder) applyLayoutToDoc(pLayout *tmpl.Template, pDoc *Doc) error {
+
+	// open dst file
+	fDst, err := oB.CreateDstFile(pDoc.DstPath)
 	if err != nil {
 		return err
 	}
+	defer fDst.Close()
 
-	var bufTmpl bytes.Buffer
-	if err = tmpl.Execute(&bufTmpl, doc.Vars); err != nil {
+	// TODO: all-files map for menus
+
+	pDoc.Vars["HTML_CONTENT"] = string(pDoc.Body)
+
+	// NOTE: re-populate Funcs() to bind updated Vars
+	return pLayout.Funcs(funcMap(pDoc.Vars)).Execute(fDst, pDoc.Vars)
+}
+
+// Determine destination filename from source filename.
+func (oB Builder) SrcPath2DstRel(srcPath string) (string, error) {
+	// get relative path of src
+	rel, err := filepath.Rel(filepath.Dir(oB.ConfDir), srcPath)
+	if err != nil {
+		return "", err
+	}
+	// extension changes (i.e. md -> html), if any
+	ext := filepath.Ext(rel)
+	if strings.ToLower(ext) == ".md" {
+		rel = strings.TrimSuffix(rel, ext) + ".html"
+	}
+	return rel, nil
+}
+
+/*
+Create/Truncate destination file and any parent directories.
+*/
+func FCreateTruncate(path string, dirMode, fileMode os.FileMode) (
+	*os.File, error,
+) {
+	err := os.MkdirAll(filepath.Dir(path), dirMode)
+	if err != nil && !os.IsExist(err) {
+		return nil, err
+	}
+	return os.OpenFile(
+		path,
+		os.O_CREATE|os.O_TRUNC|os.O_WRONLY,
+		fileMode,
+	)
+}
+
+func (oB Builder) CreateDstFile(path string) (*os.File, error) {
+	return FCreateTruncate(path, oB.DirMode, oB.FileMode)
+}
+
+/*
+Determine destination filename from source filename.
+Create/Truncate destination file.
+Copy source file contents to destination file.
+*/
+func (oB Builder) copyToDst(pDoc *Doc) error {
+	fDst, err := oB.CreateDstFile(pDoc.DstPath)
+	if err != nil {
 		return err
 	}
+	defer fDst.Close()
+	_, err = fDst.Write(pDoc.Body)
+	return err
+}
 
+func BuildCss(iWri io.Writer, body []byte, vars Vars, ext string) error {
+	tmpl := textTemplate(vars)
+	tmpl, err := tmpl.Parse(string(body))
+	if err != nil {
+		return err
+	}
+	var bufTmpl bytes.Buffer
+	if err = tmpl.Execute(&bufTmpl, vars); err != nil {
+		return err
+	}
 	if ext == ".gcss" {
 		_, err = gcss.Compile(iWri, &bufTmpl)
 	} else {
@@ -155,35 +244,24 @@ func (oB Builder) buildCSS(iWri io.Writer, doc DocProps, ext string) error {
 	return err
 }
 
-func (oB Builder) buildHTML(iWri io.Writer, doc DocProps) error {
-
-	// render html
-	tmpl := textTemplate(doc.Vars)
-	tmpl, err := tmpl.Parse(string(doc.Body))
+func BuildHtml(iWri io.Writer, body []byte, vars Vars) error {
+	tmpl := textTemplate(vars)
+	tmpl, err := tmpl.Parse(string(body))
 	if err != nil {
 		return err
 	}
-
-	var strOut bytes.Buffer
-	if err = tmpl.Execute(&strOut, doc.Vars); err != nil {
-		return err
-	}
-
-	// wrap inside layout
-	return doc.ApplyLayout(strOut.Bytes(), iWri)
+	return tmpl.Execute(iWri, vars)
 }
 
-func (oB Builder) buildMarkdown(iWri io.Writer, doc DocProps) error {
-
-	// render vars
-	tmpl := textTemplate(doc.Vars)
-	tmpl, err := tmpl.Parse(string(doc.Body))
+func BuildMd(iWri io.Writer, body []byte, vars Vars) error {
+	tmpl := textTemplate(vars)
+	tmpl, err := tmpl.Parse(string(body))
 	if err != nil {
 		return err
 	}
-
 	var bufTmpl bytes.Buffer
-	if err = tmpl.Execute(&bufTmpl, doc.Vars); err != nil {
+	err = tmpl.Execute(&bufTmpl, vars)
+	if err != nil {
 		return err
 	}
 	// render markdown
@@ -201,108 +279,105 @@ func (oB Builder) buildMarkdown(iWri io.Writer, doc DocProps) error {
 			html.WithXHTML(),
 		),
 	)
-
-	var strOut bytes.Buffer
-	if err := md.Convert(bufTmpl.Bytes(), &strOut); err != nil {
-		return err
-	}
-
-	// wrap inside layout
-	return doc.ApplyLayout(strOut.Bytes(), iWri)
+	return md.Convert(bufTmpl.Bytes(), iWri)
 }
 
-func (oB Builder) build(path string, iWri io.Writer) error {
+func progressIndicator(msg string, bColor bool) {
+	if bColor {
+		fmt.Print("\x1b[96;1m>\x1b[0m ")
+	} else {
+		fmt.Print("> ")
+	}
+	fmt.Println(msg)
+}
 
-	var err error
+func (oB Builder) build(path string, info fs.DirEntry, mLayout Layouts) (Layouts, error) {
 
-	// get src info
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
+	if mLayout == nil {
+		mLayout = make(Layouts)
 	}
 
 	// skip hidden
 	if strings.HasPrefix(info.Name(), ".") {
 		if info.IsDir() {
-			return filepath.SkipDir
+			return mLayout, filepath.SkipDir
 		}
-		return nil
+		return mLayout, nil
+	}
+
+	if info.IsDir() {
+		return mLayout, nil
 	}
 
 	// get relative path of src
 	relpath, err := filepath.Rel(filepath.Dir(oB.ConfDir), path)
 	if err != nil {
-		return err
-	}
-
-	// create dst from relative path
-	dst := filepath.Join(oB.PubDir, relpath)
-
-	// create destination dirs
-	if info.IsDir() {
-		err = os.MkdirAll(dst, oB.DirMode)
-		if os.IsExist(err) {
-			err = nil
-		}
-		return err
+		return mLayout, err
 	}
 
 	// progress indicator
-	if oB.IsTty {
-		fmt.Print("\x1b[96;1m>\x1b[0m ")
-	} else {
-		fmt.Print("> ")
-	}
-	fmt.Println(relpath)
+	progressIndicator(relpath+" (SOURCE)", oB.IsTty)
 
-	// extension renames
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
-	case ".md":
-		dst = strings.TrimSuffix(dst, ext) + ".html"
-	case ".gcss":
-		dst = strings.TrimSuffix(dst, ext) + ".css"
-	}
-
-	// create output file
-	if iWri == nil {
-		out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, oB.FileMode)
+	case ".htm", ".html", ".xml", ".css", ".gcss", ".md":
+		// no-op
+	default:
+		// simple copy & early-exit for all other extensions
+		fSrc, err := os.Open(path)
 		if err != nil {
-			return err
+			return mLayout, err
 		}
-		defer out.Close()
-		iWri = out
+		defer fSrc.Close()
+
+		dstPath, err := oB.SrcPath2DstRel(path)
+		if err != nil {
+			return mLayout, err
+		}
+
+		fDst, err := oB.CreateDstFile(filepath.Join(oB.PubDir, dstPath))
+		if err != nil {
+			return mLayout, err
+		}
+		defer fDst.Close()
+
+		_, err = io.Copy(fDst, fSrc)
+		return mLayout, err
 	}
 
-	vbase := GetEnvGlobals()
-	vbase["SITE_REL_PATH"] = filepath.ToSlash(relpath)
+	// get doc and vars
+	dp, err := oB.getDocAndAutoVars(path)
+	if err != nil {
+		return mLayout, err
+	}
+	vars := MergeVars(GetEnvGlobals(), dp.Vars)
 
-	// build
+	// build (template expansion)
+	pBuf := bytes.NewBuffer(make([]byte, 0, len(dp.Source)))
+	DEFAULT_LAYOUT := "layout.html"
 	switch ext {
 	case ".md":
-		dp, err := oB.getDocAndLayout(path, vbase, LAYOUT)
-		if err != nil {
-			return err
-		}
-		return oB.buildMarkdown(iWri, dp)
-	case ".html", ".xml":
-		dp, err := oB.getDocAndLayout(path, vbase, LAYOUT)
-		if err != nil {
-			return err
-		}
-		return oB.buildHTML(iWri, dp)
+		err = BuildMd(pBuf, dp.Source, vars)
+	case ".htm", ".html", ".xml":
+		err = BuildHtml(pBuf, dp.Source, vars)
 	case ".gcss", ".css":
-		dp, err := oB.getDocAndLayout(path, vbase, NOLAYOUT)
-		if err != nil {
-			return err
-		}
-		return oB.buildCSS(iWri, dp, ext)
-	default:
-		fSrc, err := os.Open(path)
-		if err == nil {
-			_, err = io.Copy(iWri, fSrc)
-			fSrc.Close()
-		}
-		return err
+		err = BuildCss(pBuf, dp.Source, vars, ext)
+		DEFAULT_LAYOUT = ""
 	}
+	if err != nil {
+		return mLayout, err
+	}
+
+	// append doc to its parent layout
+	docLayout := vars.GetStr("layout")
+	if len(docLayout) == 0 {
+		docLayout = DEFAULT_LAYOUT
+	}
+	sDocs := mLayout[docLayout]
+	sDocs = append(sDocs, Doc{
+		DocProps: dp,
+		Body:     pBuf.Bytes(),
+	})
+	mLayout[docLayout] = sDocs
+	return mLayout, nil
 }
