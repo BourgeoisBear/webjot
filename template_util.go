@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,10 +90,12 @@ func delimOvr(mV Vars) (string, string) {
 
 func funcMap(pt *ttmpl.Template, dp *DocProps) map[string]interface{} {
 	return map[string]interface{}{
+		"md2html": func(md string) (string, error) {
+			return Md2Html([]byte(md))
+		},
 		"doCmd": func(cmd string, params ...string) string {
 			return runCmdMergedOutput(dp.Vars, cmd, params...)
 		},
-		// TODO: add a `doMarkdown` CMD
 		// NOTE: tmplName == document src path, relative to document root
 		"doTmpl": func(tmplName string, data interface{}) (string, error) {
 			var buf bytes.Buffer
@@ -100,35 +103,42 @@ func funcMap(pt *ttmpl.Template, dp *DocProps) map[string]interface{} {
 			if err != nil {
 				return "", err
 			}
-
 			// content-specific post-processing
 			ext := strings.ToLower(filepath.Ext(tmplName))
 			switch ext {
 			case ".md":
-				md := goldmark.New(
-					goldmark.WithExtensions(
-						extension.GFM,
-						extension.Typographer,
-						extension.Table,
-					),
-					goldmark.WithParserOptions(
-						parser.WithAutoHeadingID(),
-					),
-					goldmark.WithRendererOptions(
-						html.WithUnsafe(),
-						html.WithXHTML(),
-					),
-				)
-				var bufMd bytes.Buffer
-				if err = md.Convert(buf.Bytes(), &bufMd); err != nil {
-					return "", err
-				}
-				return bufMd.String(), nil
-			default:
-				return buf.String(), nil
+				return Md2Html(buf.Bytes())
 			}
+
+			return buf.String(), nil
 		},
 	}
+}
+
+func FromMarkdown(dst io.Writer, src []byte) error {
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+			extension.Typographer,
+			extension.Table,
+		),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+		goldmark.WithRendererOptions(
+			html.WithUnsafe(),
+			html.WithXHTML(),
+		),
+	)
+	return md.Convert(src, dst)
+}
+
+func Md2Html(md []byte) (string, error) {
+	var bufHtml bytes.Buffer
+	if err := FromMarkdown(&bufHtml, md); err != nil {
+		return "", err
+	}
+	return bufHtml.String(), nil
 }
 
 func textTemplate(name string, dp *DocProps) *ttmpl.Template {

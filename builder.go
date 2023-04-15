@@ -111,8 +111,16 @@ func (oB Builder) renderToDst(dp *DocProps) error {
 		return err
 	}
 	defer fDst.Close()
-	// special handling (gcss)
-	if strings.ToLower(filepath.Ext(dp.SrcPath)) == ".gcss" {
+	// special handling
+	ext := strings.ToLower(filepath.Ext(dp.SrcPath))
+	switch ext {
+	case ".md":
+		var buf bytes.Buffer
+		if err = tmpl.Execute(&buf, dp.Vars); err != nil {
+			return err
+		}
+		return FromMarkdown(fDst, buf.Bytes())
+	case ".gcss":
 		var buf bytes.Buffer
 		if err = tmpl.Execute(&buf, dp.Vars); err != nil {
 			return err
@@ -120,7 +128,7 @@ func (oB Builder) renderToDst(dp *DocProps) error {
 		_, err = gcss.Compile(fDst, &buf)
 		return err
 	}
-	// default
+
 	return tmpl.Execute(fDst, dp.Vars)
 }
 
@@ -337,10 +345,12 @@ func (oB Builder) build(
 	docLayout := vars.GetStr("layout")
 	switch ext {
 	case ".md", ".htm", ".html", ".xml":
-		// TODO: disable layout if key is specified, but value is empty
+		// disable layout if key is specified, but value is empty
 		// use default layout if unspecified
 		if len(docLayout) == 0 {
-			docLayout = "layout.html"
+			if _, ok := vars["layout"]; !ok {
+				docLayout = "layout.html"
+			}
 		}
 	default:
 		// disable layouts for all others

@@ -16,8 +16,10 @@ type DocProps struct {
 }
 
 /*
-retrieves file contents.  splits at first headerDelim.  parses text above headerDelim into DocProps.Vars.  returns text below headerDelim as DocProps.Body.
-if no headerDelim is found, full contents are returned in DocProps.Body.
+Retrieves file contents.
+Parses YAML above first headerDelim into DocProps.Vars.
+Returns text below headerDelim as DocProps.Source.
+If no headerDelim is found, full contents are returned in DocProps.Source.
 */
 func GetDoc(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
 
