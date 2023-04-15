@@ -19,6 +19,22 @@ type VarPair struct {
 
 type Vars map[string]interface{}
 
+type Delims struct {
+	L, R string
+}
+
+func (mV Vars) GetDelims() Delims {
+	ret := Delims{L: "{{", R: "}}"}
+	ol, or := mV.GetStr("ldelim"), mV.GetStr("rdelim")
+	if len(ol) > 0 {
+		ret.L = ol
+	}
+	if len(or) > 0 {
+		ret.R = or
+	}
+	return ret
+}
+
 func (mV Vars) GetStr(k string) string {
 	if i := mV[k]; i != nil {
 		if s, ok := i.(string); ok {

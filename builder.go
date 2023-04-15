@@ -99,7 +99,7 @@ Copy source file contents to destination file.
 */
 func (oB Builder) renderToDst(dp *DocProps) error {
 	// compile template
-	tmpl := textTemplate("", dp)
+	tmpl := NewTemplate("", dp.Vars.GetDelims())
 	tmpl, err := tmpl.Parse(string(dp.Source))
 	if err != nil {
 		return err
@@ -202,7 +202,7 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 		}
 
 		// create layout tmpl, get/set layout delims
-		tmplLayout := textTemplate("root", &dlay)
+		tmplLayout := NewTemplate("", dlay.Vars.GetDelims())
 		tmplLayout, eLayout = tmplLayout.Parse(string(dlay.Source))
 		if eLayout != nil {
 			fnErr(eLayout, layoutSrc)
@@ -360,7 +360,7 @@ func (oB Builder) build(
 	}
 
 	// template expansion
-	tmpl := textTemplate("", &dp)
+	tmpl := NewTemplate("", dp.Vars.GetDelims())
 	tmpl, err = tmpl.Parse(string(dp.Source))
 	if err != nil {
 		return mLayout, err

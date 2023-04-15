@@ -76,18 +76,6 @@ func runCmdMergedOutput(mV Vars, cmd string, args ...string) string {
 	return strings.Join(parts, "\n")
 }
 
-func delimOvr(mV Vars) (string, string) {
-	l, r := "{{", "}}"
-	ol, or := mV.GetStr("ldelim"), mV.GetStr("rdelim")
-	if len(ol) > 0 {
-		l = ol
-	}
-	if len(or) > 0 {
-		r = or
-	}
-	return l, r
-}
-
 func funcMap(
 	pt *ttmpl.Template,
 	dp *DocProps,
@@ -148,12 +136,11 @@ func Md2Html(md []byte) (string, error) {
 	return bufHtml.String(), nil
 }
 
-// TODO: kill docprops
-func textTemplate(name string, dp *DocProps) *ttmpl.Template {
+func NewTemplate(tmplName string, dl Delims) *ttmpl.Template {
 	// NOTE: all funcs need to exist at Parse(),
 	//       but funcs are re-bound after Parse(), with data.
-	return ttmpl.New(name).
-		Delims(delimOvr(dp.Vars)).
+	return ttmpl.New(tmplName).
+		Delims(dl.L, dl.R).
 		Funcs(funcMap(nil, nil, nil)).
 		Option("missingkey=zero")
 }
