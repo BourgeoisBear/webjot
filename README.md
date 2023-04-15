@@ -5,7 +5,8 @@ Another static site generator, and an opinionated fork of https://github.com/zse
 ## Features
 
 * embedded HTTP server
-* os-based file watching & live-reload
+* os-based file watching & live-rebuild
+* client-side live-reload (via https://livejs.com/)
 * golang template expansion (https://docs.gomplate.ca/syntax/)
 * markdown processing (via https://github.com/yuin/goldmark)
 * CSS preprocessing (via https://github.com/yosssi/gcss)
