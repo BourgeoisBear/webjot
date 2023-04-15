@@ -10,6 +10,13 @@ domain: cryptoddns.net
 		<title>{{ html .title }}</title>
 	</head>
 	<body>
+		<ul id="menu">
+		{{ range (allDocs) -}}
+		<li>
+			<a href="/{{ .Vars.URI_PATH }}">{{ html .Vars.title }}</a>
+		</li>
+		{{ end -}}
+		</ul>
 		<article>
 			{{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
 			{{ doTmpl .DOC_KEY . }}

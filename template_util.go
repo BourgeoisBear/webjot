@@ -88,7 +88,11 @@ func delimOvr(mV Vars) (string, string) {
 	return l, r
 }
 
-func funcMap(pt *ttmpl.Template, dp *DocProps) map[string]interface{} {
+func funcMap(
+	pt *ttmpl.Template,
+	dp *DocProps,
+	allDocs []DocVar,
+) map[string]interface{} {
 	return map[string]interface{}{
 		"md2html": func(md string) (string, error) {
 			return Md2Html([]byte(md))
@@ -111,6 +115,9 @@ func funcMap(pt *ttmpl.Template, dp *DocProps) map[string]interface{} {
 			}
 
 			return buf.String(), nil
+		},
+		"allDocs": func() []DocVar {
+			return allDocs
 		},
 	}
 }
@@ -141,11 +148,12 @@ func Md2Html(md []byte) (string, error) {
 	return bufHtml.String(), nil
 }
 
+// TODO: kill docprops
 func textTemplate(name string, dp *DocProps) *ttmpl.Template {
 	// NOTE: all funcs need to exist at Parse(),
 	//       but funcs are re-bound after Parse(), with data.
 	return ttmpl.New(name).
 		Delims(delimOvr(dp.Vars)).
-		Funcs(funcMap(nil, nil)).
+		Funcs(funcMap(nil, nil, nil)).
 		Option("missingkey=zero")
 }

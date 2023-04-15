@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	tmpl "text/template"
 	"text/template/parse"
@@ -104,7 +105,7 @@ func (oB Builder) renderToDst(dp *DocProps) error {
 		return err
 	}
 	// re-bind func map vars
-	tmpl = tmpl.Funcs(funcMap(tmpl, dp))
+	tmpl = tmpl.Funcs(funcMap(tmpl, dp, nil))
 	// output file
 	fDst, err := oB.CreateDstFile(dp.DstPath)
 	if err != nil {
@@ -132,6 +133,11 @@ func (oB Builder) renderToDst(dp *DocProps) error {
 	return tmpl.Execute(fDst, dp.Vars)
 }
 
+type DocVar struct {
+	Path string
+	Vars Vars
+}
+
 /*
 Parse given layout templates.
 Nest pre-parsed document templates.
@@ -140,6 +146,30 @@ Render nested templates.
 func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 
 	vinit := GetEnvGlobals()
+	base := filepath.Dir(oB.ConfDir)
+
+	// build global docs list
+	sDV := make([]DocVar, 0)
+	for docLayout, sDocs := range mLayout {
+		if len(docLayout) == 0 {
+			continue
+		}
+		for _, doc := range sDocs {
+			tname, e2 := filepath.Rel(base, doc.SrcPath)
+			if e2 != nil {
+				fnErr(e2, doc.SrcPath)
+				continue
+			}
+			// TODO: ensure that DocVar.Path & template name replace slashes
+			sDV = append(sDV, DocVar{
+				Path: tname,
+				Vars: doc.Vars,
+			})
+		}
+	}
+	sort.Slice(sDV, func(i, j int) bool {
+		return sDV[i].Path < sDV[j].Path
+	})
 
 	// iterate layouts
 	for docLayout, sDocs := range mLayout {
@@ -182,49 +212,44 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 		// clear delims from vars
 		dlay.Vars.ClearDelims()
 
-		// add parse trees
-		tname := make([]string, len(sDocs))
-		base := filepath.Dir(oB.ConfDir)
-		for ix, doc := range sDocs {
-			var e2 error
-			// get document's src path, relative to document root
-			tname[ix], e2 = filepath.Rel(base, doc.SrcPath)
+		// render documents
+		for _, doc := range sDocs {
+			// document's src path, relative to document root, as tname
+			tname, e2 := filepath.Rel(base, doc.SrcPath)
 			if e2 != nil {
 				fnErr(e2, doc.SrcPath)
 				continue
 			}
-			// add its parse tree under that name
-			_, e2 = tmplLayout.AddParseTree(tname[ix], doc.ParseTree)
-			if e2 != nil {
-				fnErr(e2, doc.SrcPath)
-			}
-		}
-
-		// TODO: pass-in all pages and per-layout pages as separate map items
-		for ix, doc := range sDocs {
 			doc.Vars = MergeVars(vinit, dlay.Vars, doc.Vars)
-			if e2 := oB.applyLayoutToDoc(tmplLayout, tname[ix], &doc.DocProps); e2 != nil {
+			if e2 = oB.applyLayoutToDoc(tmplLayout, tname, &doc, sDV); e2 != nil {
 				fnErr(e2, doc.SrcPath)
 			}
 		}
 	}
 }
 
-func (oB Builder) applyLayoutToDoc(pLayout *tmpl.Template, tname string, dp *DocProps) error {
+func (oB Builder) applyLayoutToDoc(
+	pLayout *tmpl.Template,
+	tname string,
+	doc *Doc,
+	sDV []DocVar,
+) error {
 	// open dst file
-	fDst, err := oB.CreateDstFile(dp.DstPath)
+	fDst, err := oB.CreateDstFile(doc.DstPath)
 	if err != nil {
 		return err
 	}
 	defer fDst.Close()
 
-	// TODO: all-files map for menus
-
-	// specify which child template to render
-	dp.Vars["DOC_KEY"] = tname
+	// key child ParseTree under tname
+	if _, err = pLayout.AddParseTree(tname, doc.ParseTree); err != nil {
+		return err
+	}
+	doc.Vars["DOC_KEY"] = tname
 
 	// NOTE: re-populate Funcs() to bind updated Vars
-	return pLayout.Funcs(funcMap(pLayout, dp)).Execute(fDst, dp.Vars)
+	return pLayout.Funcs(funcMap(pLayout, &doc.DocProps, sDV)).
+		Execute(fDst, doc.Vars)
 }
 
 // Determine destination filename from source filename.
