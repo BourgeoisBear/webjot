@@ -38,6 +38,12 @@ type Doc struct {
 
 type Layouts map[string][]Doc
 
+var rxPprintExcl *regexp.Regexp
+
+func init() {
+	rxPprintExcl = regexp.MustCompile(`DIR$|WATCHMODE`)
+}
+
 func (oB *Builder) SetHdrDelim(headerDelim string) (err error) {
 	if len(headerDelim) == 0 {
 		oB.rxHdrDelim = nil
@@ -80,22 +86,11 @@ func (oB Builder) getDocAndAutoVars(path string) (DocProps, error) {
 		doc.Vars["WATCHMODE"] = "enabled"
 	}
 
-	if oB.IsShowVars {
-		doc.Vars.PrettyPrint(os.Stdout, doc.NonConformingKeys, oB.IsTty)
-	}
-
 	return doc, nil
 }
 
-// TODO: snippets? (parts which can be included on various pages
 // TODO: separate modules?
 
-/*
-TODO: markdown pass-through
-
-  - need a way to have goldmark leave items between {{ and }} untouched
-  - switch back to html/template?
-*/
 type ErrFunc func(err error, msg string)
 
 /*
@@ -112,8 +107,6 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 
 		// skip layout application when not supplied
 		if len(docLayout) == 0 {
-			// TODO: in single-template-render mode,
-			//       this will also need to template.Exec()
 			for _, doc := range sDocs {
 				if err := oB.copyToDst(&doc); err != nil {
 					fnErr(err, doc.SrcPath)
@@ -130,13 +123,12 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 			fnErr(eLayout, layoutSrc)
 			continue
 		}
-
-		if oB.IsShowVars {
-			dlay.Vars.PrettyPrint(os.Stdout, dlay.NonConformingKeys, oB.IsTty)
-		}
-
-		// merge vars (global < layout)
 		dlay.Vars = MergeVars(vinit, dlay.Vars)
+
+		// report
+		if oB.IsShowVars {
+			dlay.Vars.PrettyPrint(os.Stdout, dlay.NonConformingKeys, rxPprintExcl, oB.IsTty)
+		}
 
 		// create layout tmpl, get/set layout delims
 		tmplLayout := textTemplate(dlay.Vars)
@@ -342,6 +334,11 @@ func (oB Builder) build(path string, info fs.DirEntry, mLayout Layouts) (Layouts
 		return mLayout, err
 	}
 	vars := MergeVars(GetEnvGlobals(), dp.Vars)
+
+	// report
+	if oB.IsShowVars {
+		vars.PrettyPrint(os.Stdout, dp.NonConformingKeys, rxPprintExcl, oB.IsTty)
+	}
 
 	// build (template expansion)
 	pBuf := bytes.NewBuffer(make([]byte, 0, len(dp.Source)))

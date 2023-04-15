@@ -48,19 +48,26 @@ func (mV Vars) ClearDelims() {
 	delete(mV, "rdelim")
 }
 
-func (mV Vars) PrettyPrint(iWri io.Writer, nonConforming []string, bColor bool) error {
+func (mV Vars) PrettyPrint(
+	iWri io.Writer, nonConforming []string, rxExcl *regexp.Regexp, bColor bool,
+) error {
+
 	// get as a sorted array for consistent ordering
-	allPairs := mV.GetPairs(true)
-	// skip vars that are the same for all files
-	pairs := make([]VarPair, 0, len(allPairs))
-	for _, p := range allPairs {
-		switch p.K {
-		case "CFGDIR", "PUBDIR", "SRCDIR", "WATCHMODE":
-			continue
-		default:
-			pairs = append(pairs, p)
+	pairs := mV.GetPairs(true)
+
+	// skip vars with keys that match rxExcl
+	if rxExcl != nil {
+		filtered := make([]VarPair, 0, len(pairs))
+		for _, p := range pairs {
+			if rxExcl.MatchString(p.K) {
+				continue
+			} else {
+				filtered = append(filtered, p)
+			}
 		}
+		pairs = filtered
 	}
+
 	// find max key len
 	klen := 0
 	for _, p := range pairs {
@@ -68,11 +75,13 @@ func (mV Vars) PrettyPrint(iWri io.Writer, nonConforming []string, bColor bool) 
 			klen = l
 		}
 	}
+
 	// construct format string from max key len
 	var AON, AOFF string
 	if bColor {
 		AON, AOFF = "\x1b[92;1m", "\x1b[0m"
 	}
+
 	// write conforming key:val pairs
 	for _, p := range pairs {
 		_, err := fmt.Fprintf(iWri,
@@ -83,6 +92,7 @@ func (mV Vars) PrettyPrint(iWri io.Writer, nonConforming []string, bColor bool) 
 			return err
 		}
 	}
+
 	// write non-conforming keys
 	if len(nonConforming) > 0 {
 		if bColor {
