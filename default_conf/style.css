@@ -1,7 +1,9 @@
+font: "DaddyTimeMono"
+@@@@@@@
 body {
 	padding: 1em;
 	font-size: 13pt;
-	font-family: "PT Serif", Georgia, serif;
+	font-family: "{{ .font }}", Georgia, serif;
 }
 
 .logo-main {

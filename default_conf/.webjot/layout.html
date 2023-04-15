@@ -12,7 +12,7 @@ domain: cryptoddns.net
 	<body>
 		<article>
 			{{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
-			{{ .HTML_CONTENT }}
+			{{ doTmpl .DOC_KEY . }}
 		</article>
 		<hr />
 		<div class="contact"><a href="https://{{ .domain }}">{{ .domain }}</a></div>

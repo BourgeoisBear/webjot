@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	ttmpl "text/template"
 	"unicode"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 )
 
 func HasUcase(s string) bool {
@@ -69,14 +75,6 @@ func runCmdMergedOutput(mV Vars, cmd string, args ...string) string {
 	return strings.Join(parts, "\n")
 }
 
-func funcMap(mV Vars) map[string]interface{} {
-	return map[string]interface{}{
-		"doCmd": func(cmd string, params ...string) string {
-			return runCmdMergedOutput(mV, cmd, params...)
-		},
-	}
-}
-
 func delimOvr(mV Vars) (string, string) {
 	l, r := "{{", "}}"
 	ol, or := mV.GetStr("ldelim"), mV.GetStr("rdelim")
@@ -89,9 +87,55 @@ func delimOvr(mV Vars) (string, string) {
 	return l, r
 }
 
-func textTemplate(mV Vars) *ttmpl.Template {
-	return ttmpl.New("").
-		Delims(delimOvr(mV)).
-		Funcs(funcMap(mV)).
+func funcMap(pt *ttmpl.Template, dp *DocProps) map[string]interface{} {
+	return map[string]interface{}{
+		"doCmd": func(cmd string, params ...string) string {
+			return runCmdMergedOutput(dp.Vars, cmd, params...)
+		},
+		// TODO: add a `doMarkdown` CMD
+		// NOTE: tmplName == document src path, relative to document root
+		"doTmpl": func(tmplName string, data interface{}) (string, error) {
+			var buf bytes.Buffer
+			err := pt.ExecuteTemplate(&buf, tmplName, data)
+			if err != nil {
+				return "", err
+			}
+
+			// content-specific post-processing
+			ext := strings.ToLower(filepath.Ext(tmplName))
+			switch ext {
+			case ".md":
+				md := goldmark.New(
+					goldmark.WithExtensions(
+						extension.GFM,
+						extension.Typographer,
+						extension.Table,
+					),
+					goldmark.WithParserOptions(
+						parser.WithAutoHeadingID(),
+					),
+					goldmark.WithRendererOptions(
+						html.WithUnsafe(),
+						html.WithXHTML(),
+					),
+				)
+				var bufMd bytes.Buffer
+				if err = md.Convert(buf.Bytes(), &bufMd); err != nil {
+					return "", err
+				}
+				return bufMd.String(), nil
+			default:
+				return buf.String(), nil
+			}
+		},
+	}
+}
+
+func textTemplate(name string, dp *DocProps) *ttmpl.Template {
+	// NOTE: all funcs need to exist at Parse(),
+	//       but funcs are re-bound after Parse(), with data.
+	return ttmpl.New(name).
+		Delims(delimOvr(dp.Vars)).
+		Funcs(funcMap(nil, nil)).
 		Option("missingkey=zero")
 }
