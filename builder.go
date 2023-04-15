@@ -191,24 +191,11 @@ func (oB Builder) SrcPath2DstRel(srcPath string) (string, error) {
 }
 
 /*
-Create/Truncate destination file and any parent directories.
+Create/Truncate destination file.
 */
-func FCreateTruncate(path string, dirMode, fileMode os.FileMode) (
-	*os.File, error,
-) {
-	err := os.MkdirAll(filepath.Dir(path), dirMode)
-	if err != nil && !os.IsExist(err) {
-		return nil, err
-	}
-	return os.OpenFile(
-		path,
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY,
-		fileMode,
-	)
-}
-
 func (oB Builder) CreateDstFile(path string) (*os.File, error) {
-	return FCreateTruncate(path, oB.DirMode, oB.FileMode)
+	flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	return os.OpenFile(path, flags, oB.FileMode)
 }
 
 /*
@@ -305,14 +292,18 @@ func (oB Builder) build(path string, info fs.DirEntry, mLayout Layouts) (Layouts
 		return mLayout, nil
 	}
 
-	if info.IsDir() {
-		return mLayout, nil
-	}
-
-	// get relative path of src
 	relpath, err := filepath.Rel(filepath.Dir(oB.ConfDir), path)
 	if err != nil {
 		return mLayout, err
+	}
+
+	// create destination dirs
+	if info.IsDir() {
+		eDir := os.MkdirAll(filepath.Join(oB.PubDir, relpath), oB.DirMode)
+		if eDir != nil && !os.IsExist(eDir) {
+			return mLayout, eDir
+		}
+		return mLayout, nil
 	}
 
 	// progress indicator
