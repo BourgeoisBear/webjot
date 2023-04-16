@@ -2,14 +2,14 @@
 
 Another static site generator, and an opinionated fork of https://github.com/zserge/zs.
 
-## Fork Features
+## Fork Additions
 
 * embedded HTTP server
 * os-based file watching & live-rebuild
 * client-side live-reload (via https://livejs.com/)
-* golang template expansion in HTML/XML/MD/CSS/GCSS files (https://docs.gomplate.ca/syntax/)
-* markdown processing (https://github.com/yuin/goldmark)
-* CSS preprocessing (https://github.com/yosssi/gcss)
+* golang template expansion in CSS/GCSS files, in addition to HTML/XML/MD files (https://docs.gomplate.ca/syntax/)
+* markdown processing (via https://github.com/yuin/goldmark)
+
 
 ## Installation
 
@@ -103,39 +103,42 @@ My markdown content...
 
 ```
 
+
 ## Layouts
 
 By default, markdown and HTML sources are rendered into a layout template (default = `<site>/.webjot/layout.html`).  Layouts can be overridden by specifiying a value for `layout` in your document header.  When `layout` is set to blank, no layout will be applied.
 
 
 ### Example Document
+
 ```md
 title: My Example
 @@@@@@@
 Here it is...
 ```
 
+
 ### Example Layout
 
 ```html
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
-	<head>
-		<title>{{ html .title }}</title>
-	</head>
-	<body>
-		<ul id="menu">
-			{{ range (allDocs) -}}
-			<li>
-				<a href="/{{ .URI_PATH }}">{{ html .title }}</a>
-			</li>
-			{{ end -}}
-		</ul>
-		<article>
-			{{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
-			{{ doTmpl .DOC_KEY . }}
-		</article>
-	</body>
+  <head>
+    <title>{{ html .title }}</title>
+  </head>
+  <body>
+    <ul id="menu">
+      {{ range (allDocs) -}}
+      <li>
+        <a href="/{{ .URI_PATH }}">{{ html .title }}</a>
+      </li>
+      {{ end -}}
+    </ul>
+    <article>
+      {{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
+      {{ doTmpl .DOC_KEY . }}
+    </article>
+  </body>
 </html>
 ```
 
@@ -150,12 +153,12 @@ Go's built-in `text/template` functions are defined here: https://pkg.go.dev/tex
 
 In addition to those, here are webjot's built-ins:
 
-| Function | Description |
-| -------- | ----------- |
-| allDocs  | Returns an array of variable maps, one for each document in the site. |
-| doTmpl   | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
-| doCmd    | Executes another program and returns the combined output of STDOUT & STDERR.  To use Unix pipes and IO redirection, you will need wrap those inside an explicit shell invocation. |
-| md2html  | Renders markdown source in the 1st parameter to HTML. |
+| Function  | Description |
+| --------  | ----------- |
+| `allDocs` | Returns an array of variable maps, one for each document in the site. |
+| `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
+| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  To use Unix pipes and IO redirection, you will need wrap those inside an explicit shell invocation. |
+| `md2html` | Renders markdown source in the 1st parameter to HTML. |
 
 
 ### Variable Precedence
