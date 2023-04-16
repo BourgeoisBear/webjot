@@ -51,9 +51,9 @@ This is my website content.
 Use golang `text/template` syntax to access header variables and plugins in
 your markdown or html files, e.g. `{{ .title }}` or `{{ command arg1 arg2 }}`.
 
-Write extensions in any language you like and put them into the `.webjot`
-subdirectory.  Everything the extensions prints to stdout becomes the value of
-the placeholder.
+Write extensions in any language you like, and render them into your templates
+using the `doCmd` template func. Everything the extension writes to STDOUT &
+STDERR becomes the value of the placeholder.
 
 Every variable from the content header will be passed via environment variables
 like `title` becomes `$ZS_TITLE` and so on.
@@ -157,7 +157,11 @@ In addition to those, here are webjot's built-ins:
 | --------  | ----------- |
 | `allDocs` | Returns an array of variable maps, one for each document in the site. |
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
-| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  To use Unix pipes and IO redirection, you will need wrap those inside an explicit shell invocation. |
+| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.
+`<site>/.webjot` is added to highest priority in `$PATH` prior to command
+execution.
+To use Unix pipes and IO redirection, you will need wrap those inside of an
+explicit shell invocation like so: `{{ doCmd "sh" "-c" "env | grep ^ZS_" }}`. |
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |
 
 

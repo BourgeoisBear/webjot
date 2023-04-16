@@ -4,6 +4,7 @@ documentation:
 	- header documentation in `-help` flag
 
 features:
+	- move .webjot to top of PATH
 	- SCRIPTS var
 	- raw, non-html/md, template expansion
 	- markdown option flags
