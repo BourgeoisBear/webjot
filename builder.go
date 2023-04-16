@@ -120,7 +120,7 @@ func (oB Builder) renderToDst(dp *DocProps) error {
 		if err = tmpl.Execute(&buf, dp.Vars); err != nil {
 			return err
 		}
-		return FromMarkdown(fDst, buf.Bytes())
+		return Md2HtmlWri(fDst, buf.Bytes())
 	case ".gcss":
 		var buf bytes.Buffer
 		if err = tmpl.Execute(&buf, dp.Vars); err != nil {
@@ -149,26 +149,31 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 	base := filepath.Dir(oB.ConfDir)
 
 	// build global docs list
-	sDV := make([]DocVar, 0)
+	nVars := 0
+	for _, sDocs := range mLayout {
+		nVars += len(sDocs)
+	}
+	sDocVars := make([]Vars, 0, nVars)
 	for docLayout, sDocs := range mLayout {
 		if len(docLayout) == 0 {
 			continue
 		}
 		for _, doc := range sDocs {
-			tname, e2 := filepath.Rel(base, doc.SrcPath)
-			if e2 != nil {
-				fnErr(e2, doc.SrcPath)
-				continue
-			}
-			// TODO: ensure that DocVar.Path & template name replace slashes
-			sDV = append(sDV, DocVar{
-				Path: tname,
-				Vars: doc.Vars,
-			})
+			sDocVars = append(sDocVars, doc.Vars)
 		}
 	}
-	sort.Slice(sDV, func(i, j int) bool {
-		return sDV[i].Path < sDV[j].Path
+
+	// sort by (title, URI_PATH)
+	sort.Slice(sDocVars, func(i, j int) bool {
+		sT := make([]string, 2)
+		for strIx, dvIx := range []int{i, j} {
+			s, _ := sDocVars[dvIx]["title"].(string)
+			if len(s) == 0 {
+				s, _ = sDocVars[dvIx]["URI_PATH"].(string)
+			}
+			sT[strIx] = s
+		}
+		return sT[0] < sT[1]
 	})
 
 	// iterate layouts
@@ -221,7 +226,7 @@ func (oB Builder) ApplyLayouts(mLayout Layouts, fnErr ErrFunc) {
 				continue
 			}
 			doc.Vars = MergeVars(vinit, dlay.Vars, doc.Vars)
-			if e2 = oB.applyLayoutToDoc(tmplLayout, tname, &doc, sDV); e2 != nil {
+			if e2 = oB.applyLayoutToDoc(tmplLayout, tname, &doc, sDocVars); e2 != nil {
 				fnErr(e2, doc.SrcPath)
 			}
 		}
@@ -232,7 +237,7 @@ func (oB Builder) applyLayoutToDoc(
 	pLayout *tmpl.Template,
 	tname string,
 	doc *Doc,
-	sDV []DocVar,
+	sDocVars []Vars,
 ) error {
 	// open dst file
 	fDst, err := oB.CreateDstFile(doc.DstPath)
@@ -248,7 +253,7 @@ func (oB Builder) applyLayoutToDoc(
 	doc.Vars["DOC_KEY"] = tname
 
 	// NOTE: re-populate Funcs() to bind updated Vars
-	return pLayout.Funcs(funcMap(pLayout, &doc.DocProps, sDV)).
+	return pLayout.Funcs(funcMap(pLayout, &doc.DocProps, sDocVars)).
 		Execute(fDst, doc.Vars)
 }
 

@@ -1,5 +1,4 @@
 documentation:
-	- layouts
 	- html source example
 	- document builtin escapers
 	- header documentation in `-help` flag

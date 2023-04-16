@@ -79,11 +79,11 @@ func runCmdMergedOutput(mV Vars, cmd string, args ...string) string {
 func funcMap(
 	pt *ttmpl.Template,
 	dp *DocProps,
-	allDocs []DocVar,
+	allDocs []Vars,
 ) map[string]interface{} {
 	return map[string]interface{}{
 		"md2html": func(md string) (string, error) {
-			return Md2Html([]byte(md))
+			return Md2HtmlStr([]byte(md))
 		},
 		"doCmd": func(cmd string, params ...string) string {
 			return runCmdMergedOutput(dp.Vars, cmd, params...)
@@ -99,19 +99,19 @@ func funcMap(
 			ext := strings.ToLower(filepath.Ext(tmplName))
 			switch ext {
 			case ".md":
-				return Md2Html(buf.Bytes())
+				return Md2HtmlStr(buf.Bytes())
 			}
 
 			return buf.String(), nil
 		},
-		"allDocs": func() []DocVar {
+		"allDocs": func() []Vars {
 			return allDocs
 		},
 	}
 }
 
-func FromMarkdown(dst io.Writer, src []byte) error {
-	md := goldmark.New(
+func Md2HtmlWri(dst io.Writer, md []byte) error {
+	md_enc := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
 			extension.Typographer,
@@ -125,12 +125,12 @@ func FromMarkdown(dst io.Writer, src []byte) error {
 			html.WithXHTML(),
 		),
 	)
-	return md.Convert(src, dst)
+	return md_enc.Convert(md, dst)
 }
 
-func Md2Html(md []byte) (string, error) {
+func Md2HtmlStr(md []byte) (string, error) {
 	var bufHtml bytes.Buffer
-	if err := FromMarkdown(&bufHtml, md); err != nil {
+	if err := Md2HtmlWri(&bufHtml, md); err != nil {
 		return "", err
 	}
 	return bufHtml.String(), nil

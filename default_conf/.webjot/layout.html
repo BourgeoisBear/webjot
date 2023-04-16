@@ -13,7 +13,7 @@ domain: cryptoddns.net
 		<ul id="menu">
 		{{ range (allDocs) -}}
 		<li>
-			<a href="/{{ .Vars.URI_PATH }}">{{ html .Vars.title }}</a>
+			<a href="/{{ .URI_PATH }}">{{ html .title }}</a>
 		</li>
 		{{ end -}}
 		</ul>

@@ -2,14 +2,14 @@
 
 Another static site generator, and an opinionated fork of https://github.com/zserge/zs.
 
-## Features
+## Fork Features
 
 * embedded HTTP server
 * os-based file watching & live-rebuild
 * client-side live-reload (via https://livejs.com/)
-* golang template expansion (https://docs.gomplate.ca/syntax/)
-* markdown processing (via https://github.com/yuin/goldmark)
-* CSS preprocessing (via https://github.com/yosssi/gcss)
+* golang template expansion in HTML/XML/MD/CSS/GCSS files (https://docs.gomplate.ca/syntax/)
+* markdown processing (https://github.com/yuin/goldmark)
+* CSS preprocessing (https://github.com/yosssi/gcss)
 
 ## Installation
 
@@ -25,10 +25,10 @@ go install github.com/BourgeoisBear/webjot@latest
 | re-build site                        | `webjot <site_source_path>`        |
 | update site contents w/ live refresh | `webjot -watch <site_source_path>` |
 
-Keep your texts in markdown or HTML format, right in the main directory of your
-blog/site `<site>`.  Keep all service files (extensions, layout pages, deployment
-scripts etc) in the `<site>/.webjot` subdirectory.  Site will be rendered to the
-`<site>/.pub` subdirectory using Go's `text/template` syntax.
+Keep your texts in markdown or HTML format in the folder `<site>`. Keep all
+service files (extensions, layout pages, deployment scripts...) in the
+`<site>/.webjot` subdirectory.  After invoking `webjot`, your site will be
+rendered to the `<site>/.pub` subdirectory using Go's `text/template` syntax.
 
 Template variables can be defined as environment variables (prefixed with
 `ZS_`) prior to invocation, and at the top of each content file in YAML
@@ -103,6 +103,60 @@ My markdown content...
 
 ```
 
+## Layouts
+
+By default, markdown and HTML sources are rendered into a layout template (default = `<site>/.webjot/layout.html`).  Layouts can be overridden by specifiying a value for `layout` in your document header.  When `layout` is set to blank, no layout will be applied.
+
+
+### Example Document
+```md
+title: My Example
+@@@@@@@
+Here it is...
+```
+
+### Example Layout
+
+```html
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+	<head>
+		<title>{{ html .title }}</title>
+	</head>
+	<body>
+		<ul id="menu">
+			{{ range (allDocs) -}}
+			<li>
+				<a href="/{{ .URI_PATH }}">{{ html .title }}</a>
+			</li>
+			{{ end -}}
+		</ul>
+		<article>
+			{{ if .title }}<h1>{{ html .title }}</h1>{{ end }}
+			{{ doTmpl .DOC_KEY . }}
+		</article>
+	</body>
+</html>
+```
+
+`allDocs` is a template function.  It returns an array of variable maps--one for each document in the site.  It is sorted by each document's `.title` variable.  If that variable is not supplied for a document, that document is sorted by its `.URI_PATH` instead.  `allDocs` can be used to render site-wide menus, sitemaps, etc.
+
+`{{ doTmpl .DOC_KEY . }}` is where each document body will be rendered into the layout.  `.DOC_KEY` is a built-in variable.  It contains a relative path to the document source file currently being rendered.  `.` is a reference to the current document's variable map.
+
+
+### Template Functions
+
+Go's built-in `text/template` functions are defined here: https://pkg.go.dev/text/template#hdr-Functions
+
+In addition to those, here are webjot's built-ins:
+
+| Function | Description |
+| -------- | ----------- |
+| allDocs  | Returns an array of variable maps, one for each document in the site. |
+| doTmpl   | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
+| doCmd    | Executes another program and returns the combined output of STDOUT & STDERR.  To use Unix pipes and IO redirection, you will need wrap those inside an explicit shell invocation. |
+| md2html  | Renders markdown source in the 1st parameter to HTML. |
+
 
 ### Variable Precedence
 
@@ -117,15 +171,6 @@ document > document's layout > environment variables
 
 So if `my_var` is set to `one` in `doc.md`, `two` inside its layout, and
 `three` inside `$ZS_MY_VAR`, `my_var` will be rendered as `one`.
-
-
-```
-TODO: layout.html documentation
-	* HTML_CONTENT
-	* layout: header
-
-TODO: built-in template funcs documentation
-```
 
 **NOTE**: To ensure that live-refresh scripts are excluded from your final
 pages, be sure to re-build *without* the `-watch` flag prior to publication.
