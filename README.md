@@ -142,7 +142,7 @@ Here it is...
 </html>
 ```
 
-`allDocs` is a template function.  It returns an array of variable maps--one for each document in the site.  It is sorted by each document's `.title` variable.  If that variable is not supplied for a document, that document is sorted by its `.URI_PATH` instead.  `allDocs` can be used to render site-wide menus, sitemaps, etc.
+`allDocs` is a template function.  It returns an array of variable maps&mdash;one for each document in the site.  It is sorted by each document's `.title` variable.  If that variable is not supplied for a document, that document is sorted by its `.URI_PATH` instead.  `allDocs` can be used to render site-wide menus, sitemaps, etc.
 
 `{{ doTmpl .DOC_KEY . }}` is where each document body will be rendered into the layout.  `.DOC_KEY` is a built-in variable.  It contains a relative path to the document source file currently being rendered.  `.` is a reference to the current document's variable map.
 
@@ -163,10 +163,10 @@ In addition to those, here are webjot's built-ins:
 
 ### Variable Precedence
 
-Variables may be specified globally through shell `environment variables`,
-inside shared `layouts`, and inside the `document` itself.  When the same
+Variables may be specified globally through shell environment variables,
+inside shared layouts, and inside the document itself.  When the same
 variable name is used at different levels, the following precedence is
-observed:
+observed (x > y, meaning x replaces y):
 
 ```
 document > document's layout > environment variables
