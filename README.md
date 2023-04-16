@@ -157,11 +157,7 @@ In addition to those, here are webjot's built-ins:
 | --------  | ----------- |
 | `allDocs` | Returns an array of variable maps, one for each document in the site. |
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
-| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.
-`<site>/.webjot` is added to highest priority in `$PATH` prior to command
-execution.
-To use Unix pipes and IO redirection, you will need wrap those inside of an
-explicit shell invocation like so: `{{ doCmd "sh" "-c" "env | grep ^ZS_" }}`. |
+| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  `<site>/.webjot` is given highest priority in `$PATH` prior to command execution.<br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |
 
 
