@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -227,7 +226,7 @@ func progressIndicator(msg string, bColor bool) {
 	fmt.Println(msg)
 }
 
-func (oB Builder) compileLayout(path string, vinit Vars) (*Doc, error) {
+func (oB Builder) compileLayout(path string) (*Doc, error) {
 
 	// get relative path for layout reference in templates
 	relPath, err := filepath.Rel(oB.ConfDir, path)
@@ -240,42 +239,33 @@ func (oB Builder) compileLayout(path string, vinit Vars) (*Doc, error) {
 	}
 
 	// get layout & its header
-	progressIndicator(relPath+" (LAYOUT)", oB.IsTty)
 	pdoc.DocProps, err = LoadDocProps(path, oB.rxHdrDelim)
 	if err != nil {
 		return pdoc, err
 	}
 
-	pdoc.Vars = MergeVars(vinit, pdoc.Vars)
-
-	// report
-	if oB.IsShowVars {
-		pdoc.Vars.PrettyPrint(
-			os.Stdout, pdoc.DocProps.NonConformingKeys, rxPprintExcl, oB.IsTty,
-		)
-	}
-
 	// create layout tmpl, get/set layout delims
+	delete(pdoc.Vars, "layout")
 	pdoc.Tmpl = NewTemplate("", pdoc.Vars.GetDelims())
 	pdoc.Tmpl, err = pdoc.Tmpl.Parse(string(pdoc.DocProps.Source))
 	return pdoc, err
 }
 
-func (oB Builder) compileOrCopyFile(path string) (*Doc, error) {
+func (oB Builder) compileOrCopyFile(path string, vinit Vars) (*Doc, error) {
 
 	// create dst dir
 	srcrel, dstrel, err := oB.SrcPath2DstRel(path)
 	if err != nil {
 		return nil, err
 	}
+
+	// NOTE: always make dirs, in case of file/dir addition under watch mode
+	//       (i.e. partial re-build)
 	dstdir := filepath.Dir(filepath.Join(oB.PubDir, dstrel))
 	err = os.MkdirAll(dstdir, oB.DirMode)
 	if err != nil && !os.IsExist(err) {
 		return nil, err
 	}
-
-	// progress indicator
-	progressIndicator(srcrel+" (SOURCE)", oB.IsTty)
 
 	/*
 		fmt.Printf("%#v\n", map[string]string{
@@ -290,35 +280,17 @@ func (oB Builder) compileOrCopyFile(path string) (*Doc, error) {
 	// simple copy & early-exit for non-template extensions
 	ext := filepath.Ext(path)
 	if !IsTemplateExt(ext) {
-		fSrc, err := os.Open(path)
+		dstfile := filepath.Join(oB.PubDir, dstrel)
+		err := CopyOnDirty(dstfile, path, oB.FileMode)
 		if err != nil {
 			return nil, err
 		}
-		defer fSrc.Close()
-
-		// TODO: don't copy if exists & is identical
-		fDst, err := oB.CreateDstFile(filepath.Join(oB.PubDir, dstrel))
-		if err != nil {
-			return nil, err
-		}
-		defer fDst.Close()
-
-		_, err = io.Copy(fDst, fSrc)
-		return nil, err
 	}
 
 	// get doc and vars
 	dp, err := oB.getDocAndAutoVars(path)
 	if err != nil {
 		return nil, err
-	}
-	vars := MergeVars(GetEnvGlobals(), dp.Vars)
-
-	// TODO: src & dst paths in DocProps?
-	// TODO: hoist reporting and globals, here and in template compile
-	// report
-	if oB.IsShowVars {
-		vars.PrettyPrint(os.Stdout, dp.NonConformingKeys, rxPprintExcl, oB.IsTty)
 	}
 
 	// template expansion
@@ -329,6 +301,7 @@ func (oB Builder) compileOrCopyFile(path string) (*Doc, error) {
 	}
 
 	// layout determination
+	vars := MergeVars(vinit, dp.Vars)
 	docLayout := vars.GetStr("layout")
 	if IsLayoutableExt(ext) {
 		// disable layout if key is specified, but value is empty
@@ -351,36 +324,57 @@ func (oB Builder) compileOrCopyFile(path string) (*Doc, error) {
 	}, nil
 }
 
-// TODO: return file type in Doc?
+type DocType uint
+
+const (
+	DT_NIL DocType = iota
+	DT_DOC
+	DT_LAYOUT
+)
+
 func (oB Builder) buildFile(
 	path string,
 	vinit Vars,
 	mL2D Layout2Docs,
 	mLo Layouts,
-) (pdoc *Doc, err error) {
+) (pdoc *Doc, dt DocType, err error) {
 
 	defer func() {
 		if err != nil {
 			err = errors.WithMessage(err, path)
 		}
+		if oB.IsShowVars && (pdoc != nil) {
+			pdoc.Vars.PrettyPrint(
+				os.Stdout, pdoc.NonConformingKeys, rxPprintExcl, oB.IsTty,
+			)
+		}
 	}()
+
+	// get relative path of src
+	srcrel, err := filepath.Rel(filepath.Dir(oB.ConfDir), path)
+	if err != nil {
+		return
+	}
 
 	// compile layout
 	if filepath.HasPrefix(path, oB.ConfDir) {
 		ext := filepath.Ext(path)
 		switch strings.ToLower(ext) {
 		case ".html", ".htm", ".xml":
-			pdoc, err = oB.compileLayout(path, vinit)
+			progressIndicator(srcrel+" (LAYOUT)", oB.IsTty)
+			pdoc, err = oB.compileLayout(path)
 			if err != nil {
 				return
 			}
 			mLo[pdoc.TmplName] = *pdoc
+			dt = DT_LAYOUT
 		}
 		return
 	}
 
 	// compile templates / copy others into `.pub/`
-	pdoc, err = oB.compileOrCopyFile(path)
+	progressIndicator(srcrel+" (DOCUMENT)", oB.IsTty)
+	pdoc, err = oB.compileOrCopyFile(path, vinit)
 	if err != nil {
 		return
 	}
@@ -388,8 +382,21 @@ func (oB Builder) buildFile(
 	// append doc to layout map
 	if pdoc != nil {
 		sDocs := mL2D[pdoc.LayoutName]
-		sDocs = append(sDocs, *pdoc)
+		// if exists, overwrite
+		bFound := false
+		for ix := range sDocs {
+			if sDocs[ix].TmplName == pdoc.TmplName {
+				sDocs[ix] = *pdoc
+				bFound = true
+				break
+			}
+		}
+		// if not found, append
+		if !bFound {
+			sDocs = append(sDocs, *pdoc)
+		}
 		mL2D[pdoc.LayoutName] = sDocs
+		dt = DT_DOC
 	}
 
 	return

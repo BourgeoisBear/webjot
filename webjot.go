@@ -38,9 +38,11 @@ func buildAll(oB Builder, srcDir string) (Layout2Docs, Layouts, error) {
 
 	// recurse through source dir
 	wdFunc := func(path string, info fs.DirEntry, eWalk error) (eout error) {
+
 		if eWalk != nil {
 			return errors.WithMessage(eWalk, path)
 		}
+
 		fname := info.Name()
 		if info.IsDir() {
 			// don't recurse hidden dirs except for ConfDir
@@ -58,10 +60,9 @@ func buildAll(oB Builder, srcDir string) (Layout2Docs, Layouts, error) {
 			}
 		}
 
-		_, err := oB.buildFile(path, vinit, mL2D, mLayouts)
+		_, _, err := oB.buildFile(path, vinit, mL2D, mLayouts)
 		if err != nil {
-			// TODO: pretty-print error
-			fmt.Fprintln(os.Stderr, err.Error())
+			ErrRpt(err, oB.IsTty)
 		}
 		return nil
 	}
@@ -115,33 +116,51 @@ func watch(oB Builder, srcDir string, mL2D Layout2Docs, mLo Layouts) error {
 			if !ok {
 				return nil
 			}
+			/*
+				TODO: treat both Remove & Rename as deletes (NOTE: rename is followed by a create)
+				TODO: file exclusive between HTTP:HEAD and writes (for live.js issues)
+			*/
+
+			if evt.Has(fsnotify.Rename) {
+				fmt.Println(evt)
+			}
+
 			// rebuild file
-			if evt.Has(fsnotify.Write) {
+			if evt.Has(fsnotify.Write) || evt.Has(fsnotify.Create) {
+
+				// skip dirs and hidden files
+				fi, err := os.Stat(evt.Name)
+				if err != nil {
+					ErrRpt(errors.WithMessage(err, evt.Name), oB.IsTty)
+					continue
+				}
+				if fi.IsDir() {
+					continue
+				} else if strings.HasPrefix(fi.Name(), ".") {
+					continue
+				}
 
 				// skip PubDir changes
 				if filepath.HasPrefix(evt.Name, oB.PubDir) {
 					continue
 				}
 
-				// TODO: skip dirs & hiddens
-				// TODO: deletes?
-				// TODO: track dependency graph, only re-build dirty
-
 				fmt.Println(evt)
 
-				_, err := oB.buildFile(evt.Name, vinit, mL2D, mLo)
+				_, _, err = oB.buildFile(evt.Name, vinit, mL2D, mLo)
 				if err != nil {
-					errRpt(err, oB.IsTty)
+					ErrRpt(err, oB.IsTty)
 					continue
 				}
 
+				// TODO: track dependency graph, only re-build dirty
 				// parse layouts, render nested templates
 				oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
-					errRpt(errors.WithMessage(err, msg), oB.IsTty)
+					ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
 				})
 			}
 		case err, ok := <-pW.Errors:
-			errRpt(err, oB.IsTty)
+			ErrRpt(err, oB.IsTty)
 			if !ok {
 				return nil
 			}
@@ -205,7 +224,7 @@ func main() {
 
 	var err error
 	defer func() {
-		errRpt(err, bIsTty)
+		ErrRpt(err, bIsTty)
 		if err != nil {
 			os.Exit(1)
 		}
@@ -316,7 +335,7 @@ EXAMPLES
 		return
 	}
 	oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
-		errRpt(errors.WithMessage(err, msg), oB.IsTty)
+		ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
 	})
 
 	if oB.IsWatchMode {
@@ -334,13 +353,13 @@ EXAMPLES
 			// open web browser
 			go func() {
 				time.Sleep(time.Second)
-				errRpt(OpenBrowser("http://localhost:"+szPort), bIsTty)
+				ErrRpt(OpenBrowser("http://localhost:"+szPort), bIsTty)
 			}()
 
 			// start http server
 			e2 := http.ListenAndServe(":"+szPort, nil)
 			if e2 != nil {
-				errRpt(e2, bIsTty)
+				ErrRpt(e2, bIsTty)
 			}
 
 		}()

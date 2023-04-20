@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func errRpt(err error, isTty bool) {
+func ErrRpt(err error, isTty bool) {
 	if err != nil {
 		if isTty {
 			fmt.Fprint(os.Stderr, "\x1b[91;1mERROR\x1b[0m: ")
@@ -24,6 +25,61 @@ func errRpt(err error, isTty bool) {
 		}
 		fmt.Fprintln(os.Stderr, err.Error())
 	}
+}
+
+/*
+copies if:
+  - destination does not exist, OR
+  - destination has different size than source, OR
+  - destination has different mtime than source
+*/
+func CopyOnDirty(dst, src string, fileMode os.FileMode) error {
+
+	fSrc, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer fSrc.Close()
+
+	iSrc, err := fSrc.Stat()
+	if err != nil {
+		return err
+	}
+
+	fnCopy := func() error {
+		err := func() error {
+			flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+			fDst, err := os.OpenFile(dst, flags, fileMode)
+			if err != nil {
+				return err
+			}
+			defer fDst.Close()
+			_, err = io.Copy(fDst, fSrc)
+			return err
+		}()
+		if err != nil {
+			return err
+		}
+		mtime := iSrc.ModTime()
+		return os.Chtimes(dst, mtime, mtime)
+	}
+
+	iDst, err := os.Stat(dst)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fnCopy()
+		} else {
+			return err
+		}
+	}
+
+	// copy if modified (fuzzy check)
+	if (iDst.Size() != iSrc.Size()) ||
+		(iDst.ModTime() != iSrc.ModTime()) {
+		return fnCopy()
+	}
+
+	return nil
 }
 
 func searchDirAncestors(start, needle string) (found string, err error) {
