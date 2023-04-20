@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -75,7 +76,13 @@ watches for changes to source and config files
 re-builds on change
 NOTE: blocking channel-select loop
 */
-func watch(oB Builder, srcDir string, mL2D Layout2Docs, mLo Layouts) error {
+func watch(
+	oB Builder,
+	srcDir string,
+	mL2D Layout2Docs,
+	mLo Layouts,
+	rwm *sync.RWMutex,
+) error {
 
 	// create new pW
 	pW, err := fsnotify.NewWatcher()
@@ -116,10 +123,9 @@ func watch(oB Builder, srcDir string, mL2D Layout2Docs, mLo Layouts) error {
 			if !ok {
 				return nil
 			}
-			/*
-				TODO: treat both Remove & Rename as deletes (NOTE: rename is followed by a create)
-				TODO: file exclusive between HTTP:HEAD and writes (for live.js issues)
-			*/
+
+			// TODO: treat both Remove & Rename as deletes
+			//       (NOTE: rename is followed by a create)
 
 			if evt.Has(fsnotify.Rename) {
 				fmt.Println(evt)
@@ -147,17 +153,24 @@ func watch(oB Builder, srcDir string, mL2D Layout2Docs, mLo Layouts) error {
 
 				fmt.Println(evt)
 
-				_, _, err = oB.buildFile(evt.Name, vinit, mL2D, mLo)
-				if err != nil {
-					ErrRpt(err, oB.IsTty)
-					continue
-				}
+				func() {
+					// mutexing between HTTP:HEAD and writes to /.pub/
+					// (for live.js issues w/ files in the process of being written)
+					rwm.Lock()
+					defer rwm.Unlock()
 
-				// TODO: track dependency graph, only re-build dirty
-				// parse layouts, render nested templates
-				oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
-					ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
-				})
+					_, _, err := oB.buildFile(evt.Name, vinit, mL2D, mLo)
+					if err != nil {
+						ErrRpt(err, oB.IsTty)
+						return
+					}
+
+					// TODO: track dependency graph, only re-build dirty
+					// parse layouts, render nested templates
+					oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
+						ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
+					})
+				}()
 			}
 		case err, ok := <-pW.Errors:
 			ErrRpt(err, oB.IsTty)
@@ -340,6 +353,8 @@ EXAMPLES
 
 	if oB.IsWatchMode {
 
+		var rwm sync.RWMutex
+
 		// start watch webserver
 		go func() {
 
@@ -347,7 +362,7 @@ EXAMPLES
 			fmt.Printf("serving %s on port %d\n", oB.PubDir, httpPort)
 
 			htdocs := http.Dir(oB.PubDir)
-			hdl := HeadHandler(htdocs, http.FileServer(htdocs))
+			hdl := HeadHandler(htdocs, http.FileServer(htdocs), &rwm)
 			http.Handle("/", hdl)
 
 			// open web browser
@@ -365,7 +380,7 @@ EXAMPLES
 		}()
 
 		// rebuild on change
-		err = watch(oB, webRoot, mL2D, mLo)
+		err = watch(oB, webRoot, mL2D, mLo, &rwm)
 
 	}
 }

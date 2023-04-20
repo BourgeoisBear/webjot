@@ -8,6 +8,7 @@ documentation:
 features:
 	- recursion depth catcher
 	- move .webjot to top of PATH for doCmd
+			TODO: ensure proper path separators
 	- YAML-parse envvars
 	- source code highlighting
 	- separate modules?

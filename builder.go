@@ -166,14 +166,7 @@ func (oB Builder) ApplyLayouts(mLayout Layout2Docs, mLo Layouts, fnErr ErrFunc) 
 				}
 				defer fDst.Close()
 
-				/*
-					TODO:
-						- ability to call {{template "name" pipeline}}
-							(add parse trees)?
-						- OR remove {{ template ... }} nodes from parse trees
-
-						- check if there are recursion issues with doc.TmplName & doCmd
-				*/
+				// TODO: check if there are recursion issues with doc.TmplName & doCmd
 
 				// NOTE: re-populate Funcs() on each doc to bind updated Vars
 				doc.Vars["DOC_KEY"] = doc.TmplName

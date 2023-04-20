@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -157,9 +158,14 @@ func OpenBrowser(url string) error {
 	return exec.Command(cmd, args...).Start()
 }
 
-func HeadHandler(hDir http.Dir, oHandler http.Handler) http.Handler {
+func HeadHandler(hDir http.Dir, oHandler http.Handler, rwm *sync.RWMutex) http.Handler {
 
 	return http.HandlerFunc(func(iWri http.ResponseWriter, pRq *http.Request) {
+
+		// mutexing between HTTP:HEAD and writes to /.pub/
+		// (for live.js issues w/ files in the process of being written)
+		rwm.RLock()
+		defer rwm.RUnlock()
 
 		if pRq.Method != "HEAD" {
 			oHandler.ServeHTTP(iWri, pRq)
