@@ -251,17 +251,18 @@ func (oB Builder) compileLayout(path string) (*Doc, error) {
 	return pdoc, err
 }
 
-func (oB Builder) compileOrCopyFile(path string, vinit Vars) (*Doc, error) {
+func (oB Builder) compileOrCopyFile(srcpath string, vinit Vars) (*Doc, error) {
 
 	// create dst dir
-	srcrel, dstrel, err := oB.SrcPath2DstRel(path)
+	srcrel, dstrel, err := oB.SrcPath2DstRel(srcpath)
 	if err != nil {
 		return nil, err
 	}
+	dstpath := filepath.Join(oB.PubDir, dstrel)
 
 	// NOTE: always make dirs, in case of file/dir addition under watch mode
 	//       (i.e. partial re-build)
-	dstdir := filepath.Dir(filepath.Join(oB.PubDir, dstrel))
+	dstdir := filepath.Dir(dstpath)
 	err = os.MkdirAll(dstdir, oB.DirMode)
 	if err != nil && !os.IsExist(err) {
 		return nil, err
@@ -278,17 +279,13 @@ func (oB Builder) compileOrCopyFile(path string, vinit Vars) (*Doc, error) {
 	*/
 
 	// simple copy & early-exit for non-template extensions
-	ext := filepath.Ext(path)
+	ext := filepath.Ext(srcpath)
 	if !IsTemplateExt(ext) {
-		dstfile := filepath.Join(oB.PubDir, dstrel)
-		err := CopyOnDirty(dstfile, path, oB.FileMode)
-		if err != nil {
-			return nil, err
-		}
+		return nil, CopyOnDirty(dstpath, srcpath, oB.FileMode)
 	}
 
 	// get doc and vars
-	dp, err := oB.getDocAndAutoVars(path)
+	dp, err := oB.getDocAndAutoVars(srcpath)
 	if err != nil {
 		return nil, err
 	}
