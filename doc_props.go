@@ -21,7 +21,7 @@ Parses YAML above first headerDelim into DocProps.Vars.
 Returns text below headerDelim as DocProps.Source.
 If no headerDelim is found, full contents are returned in DocProps.Source.
 */
-func GetDoc(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
+func LoadDocProps(path string, rxHdrDelim *regexp.Regexp) (DocProps, error) {
 
 	ret := DocProps{SrcPath: path, Vars: make(Vars)}
 	pf, err := os.Open(path)

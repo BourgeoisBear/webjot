@@ -30,23 +30,43 @@ var SiteCfgFS embed.FS
 
 const SiteCfgDirName = "default_conf"
 
-func buildAll(oB Builder, srcDir string) (Layouts, error) {
+func buildAll(oB Builder, srcDir string) (Layout2Docs, Layouts, error) {
+
+	vinit := GetEnvGlobals()
+	mL2D := make(Layout2Docs)
 	mLayouts := make(Layouts)
+
 	// recurse through source dir
 	wdFunc := func(path string, info fs.DirEntry, eWalk error) (eout error) {
-		defer func() {
-			if eout != nil && eout != fs.SkipDir {
-				eout = errors.WithMessage(eout, path)
-			}
-		}()
 		if eWalk != nil {
-			eout = eWalk
-		} else {
-			mLayouts, eout = oB.build(path, info, mLayouts)
+			return errors.WithMessage(eWalk, path)
 		}
-		return
+		fname := info.Name()
+		if info.IsDir() {
+			// don't recurse hidden dirs except for ConfDir
+			if strings.HasPrefix(fname, ".") {
+				if path != oB.ConfDir {
+					return filepath.SkipDir
+				}
+			}
+			// recurse into ordinary dirs
+			return nil
+		} else {
+			// skip hidden files
+			if strings.HasPrefix(fname, ".") {
+				return nil
+			}
+		}
+
+		_, err := oB.buildFile(path, vinit, mL2D, mLayouts)
+		if err != nil {
+			// TODO: pretty-print error
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
+		return nil
 	}
-	return mLayouts, filepath.WalkDir(srcDir, wdFunc)
+	err := filepath.WalkDir(srcDir, wdFunc)
+	return mL2D, mLayouts, err
 }
 
 /*
@@ -54,7 +74,7 @@ watches for changes to source and config files
 re-builds on change
 NOTE: blocking channel-select loop
 */
-func watch(oB Builder, srcDir string) error {
+func watch(oB Builder, srcDir string, mL2D Layout2Docs, mLo Layouts) error {
 
 	// create new pW
 	pW, err := fsnotify.NewWatcher()
@@ -86,6 +106,8 @@ func watch(oB Builder, srcDir string) error {
 		return err
 	}
 
+	vinit := GetEnvGlobals()
+
 	// listen for events
 	for {
 		select {
@@ -96,25 +118,27 @@ func watch(oB Builder, srcDir string) error {
 			// rebuild file
 			if evt.Has(fsnotify.Write) {
 
-				modDir := filepath.Dir(evt.Name)
-
 				// skip PubDir changes
-				if filepath.HasPrefix(modDir, oB.PubDir) {
-					break
+				if filepath.HasPrefix(evt.Name, oB.PubDir) {
+					continue
 				}
+
+				// TODO: skip dirs & hiddens
+				// TODO: deletes?
+				// TODO: track dependency graph, only re-build dirty
 
 				fmt.Println(evt)
 
-				// parse doc templates
-				mLayout, e2 := buildAll(oB, filepath.Dir(oB.ConfDir))
-				if e2 != nil {
-					errRpt(e2, oB.IsTty)
-				} else {
-					// parse layouts, render nested templates
-					oB.ApplyLayouts(mLayout, func(err error, msg string) {
-						errRpt(errors.WithMessage(err, msg), oB.IsTty)
-					})
+				_, err := oB.buildFile(evt.Name, vinit, mL2D, mLo)
+				if err != nil {
+					errRpt(err, oB.IsTty)
+					continue
 				}
+
+				// parse layouts, render nested templates
+				oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
+					errRpt(errors.WithMessage(err, msg), oB.IsTty)
+				})
 			}
 		case err, ok := <-pW.Errors:
 			errRpt(err, oB.IsTty)
@@ -286,11 +310,12 @@ EXAMPLES
 		}
 	}
 
-	mLayout, err := buildAll(oB, tgt)
+	// initial site build
+	mL2D, mLo, err := buildAll(oB, tgt)
 	if err != nil {
 		return
 	}
-	oB.ApplyLayouts(mLayout, func(err error, msg string) {
+	oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
 		errRpt(errors.WithMessage(err, msg), oB.IsTty)
 	})
 
@@ -321,6 +346,7 @@ EXAMPLES
 		}()
 
 		// rebuild on change
-		err = watch(oB, webRoot)
+		err = watch(oB, webRoot, mL2D, mLo)
+
 	}
 }

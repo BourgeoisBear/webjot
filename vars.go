@@ -23,8 +23,12 @@ type Delims struct {
 	L, R string
 }
 
+func DefaultDelims() Delims {
+	return Delims{L: "{{", R: "}}"}
+}
+
 func (mV Vars) GetDelims() Delims {
-	ret := Delims{L: "{{", R: "}}"}
+	ret := DefaultDelims()
 	ol, or := mV.GetStr("ldelim"), mV.GetStr("rdelim")
 	if len(ol) > 0 {
 		ret.L = ol
