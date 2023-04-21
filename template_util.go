@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	tt "text/template"
 	"unicode"
@@ -107,7 +108,7 @@ type DocsMap map[string]Doc
 func funcMap(
 	tmplName string,
 	mDocs DocsMap,
-	sDocsOrdered []Vars,
+	sNavDocs []Vars,
 ) map[string]interface{} {
 
 	fnVars := func(name string) (Doc, bool) {
@@ -147,8 +148,29 @@ func funcMap(
 			err := postProcess(pbuf, tmplName, doc.Tmpl, data)
 			return pbuf.String(), err
 		},
-		"allDocs": func() []Vars {
-			return sDocsOrdered
+		"allDocs": func(ordKeys ...string) []Vars {
+			if len(ordKeys) == 0 {
+				return sNavDocs
+			}
+			// clone
+			ret := make([]Vars, len(sNavDocs))
+			for i := range sNavDocs {
+				ret[i] = sNavDocs[i]
+			}
+			// sort list of doc vars by document (title, URI_PATH)
+			sort.Slice(ret, func(i, j int) bool {
+				sT := make([]string, 2)
+				for ixStr, ixVar := range []int{i, j} {
+					for _, ordK := range ordKeys {
+						if v, ok := sNavDocs[ixVar][ordK].(string); ok {
+							sT[ixStr] = v
+							break
+						}
+					}
+				}
+				return sT[0] < sT[1]
+			})
+			return ret
 		},
 	}
 	return funcmap

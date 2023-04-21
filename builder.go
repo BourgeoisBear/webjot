@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	tt "text/template"
 	"time"
@@ -101,7 +100,7 @@ func (oB Builder) ApplyLayouts(
 	}
 
 	// build vars list & templates map for all docs
-	sDocsOrdered := make([]Vars, 0, nDocs)
+	sNavDocs := make([]Vars, 0, nDocs)
 	mDocs := make(DocsMap, nDocs)
 	vinit := GetEnvGlobals()
 	for loName, sDocs := range mLayout {
@@ -113,24 +112,11 @@ func (oB Builder) ApplyLayouts(
 		for _, doc := range sDocs {
 			doc.Vars = MergeVars(vbase, doc.Vars)
 			if IsLayoutableExt(filepath.Ext(doc.TmplName)) {
-				sDocsOrdered = append(sDocsOrdered, doc.Vars)
+				sNavDocs = append(sNavDocs, doc.Vars)
 			}
 			mDocs[doc.TmplName] = doc
 		}
 	}
-
-	// sort list of doc vars by document (title, URI_PATH)
-	sort.Slice(sDocsOrdered, func(i, j int) bool {
-		sT := make([]string, 2)
-		for strIx, dvIx := range []int{i, j} {
-			s, _ := sDocsOrdered[dvIx]["title"].(string)
-			if len(s) == 0 {
-				s, _ = sDocsOrdered[dvIx]["URI_PATH"].(string)
-			}
-			sT[strIx] = s
-		}
-		return sT[0] < sT[1]
-	})
 
 	ptDefault := NewTemplate("", DefaultDelims())
 	ptDefault.Parse(`{{ doTmpl .DOC_KEY . }}`)
@@ -184,7 +170,7 @@ func (oB Builder) ApplyLayouts(
 
 				// NOTE: re-populate Funcs() on each doc to bind updated Vars
 				return pLayoutTmpl.
-					Funcs(funcMap(doc.TmplName, mDocs, sDocsOrdered)).
+					Funcs(funcMap(doc.TmplName, mDocs, sNavDocs)).
 					Execute(fDst, execVars)
 
 			}(); e2 != nil {

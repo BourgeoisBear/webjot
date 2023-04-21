@@ -6,10 +6,8 @@ documentation:
 	- header documentation in `-help` flag
 
 features:
-	- sort allDocs by date/title, filter by category, walk by categories
+	- filter by category, walk by categories
 	- recursion depth catcher
-	- move .webjot to top of PATH for doCmd
-			TODO: ensure proper path separators
 	- YAML-parse envvars
 	- source code highlighting
 	- separate modules?
