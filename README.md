@@ -160,6 +160,9 @@ In addition to those, here are webjot's built-ins:
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
 | `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  `<site>/.webjot` is given highest priority in `$PATH` prior to command execution.<br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |
+| `toSlice` | Create new slice from parameters. |
+| `toMap`   | Create new map from parameters, alternating between key and value. |
+| `toTime`  | Create new time.Time value from a date/time layout & value via [time.Parse](https://pkg.go.dev/time#Parse). |
 
 
 ### Variable Precedence

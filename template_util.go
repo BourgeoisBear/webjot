@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	tt "text/template"
+	"time"
 	"unicode"
 
 	"github.com/yosssi/gcss"
@@ -177,6 +178,23 @@ func funcMap(
 			})
 			return sVars
 		},
+		"toSlice": func(vals ...interface{}) []interface{} {
+			ret := make([]interface{}, len(vals))
+			for i := range vals {
+				ret[i] = vals[i]
+			}
+			return ret
+		},
+		"toMap": func(vals ...interface{}) map[interface{}]interface{} {
+			ret := make(map[interface{}]interface{}, len(vals)/2)
+			for ix := range vals {
+				if (ix % 2) == 1 {
+					ret[vals[ix-1]] = vals[ix]
+				}
+			}
+			return ret
+		},
+		"toTime": time.Parse,
 	}
 	return funcmap
 }
