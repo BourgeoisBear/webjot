@@ -78,6 +78,7 @@ func CopyOnDirty(dst, src string, fileMode os.FileMode) error {
 		return err
 	}
 
+	srcTime := iSrc.ModTime().Round(time.Second)
 	fnCopy := func() error {
 		err := func() error {
 			flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
@@ -92,22 +93,23 @@ func CopyOnDirty(dst, src string, fileMode os.FileMode) error {
 		if err != nil {
 			return err
 		}
-		mtime := iSrc.ModTime()
-		return os.Chtimes(dst, mtime, mtime)
+		return os.Chtimes(dst, srcTime, srcTime)
 	}
 
 	iDst, err := os.Stat(dst)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// fmt.Println("DOES NOT EXIST ", dst)
 			return fnCopy()
 		} else {
 			return err
 		}
 	}
+	dstTime := iDst.ModTime().Round(time.Second)
 
 	// copy if modified (fuzzy check)
-	if (iDst.Size() != iSrc.Size()) ||
-		(iDst.ModTime() != iSrc.ModTime()) {
+	if (iDst.Size() != iSrc.Size()) || (dstTime != srcTime) {
+		// fmt.Println("DIRTY ", dst, iDst.Size(), iSrc.Size(), dstTime, srcTime)
 		return fnCopy()
 	}
 
