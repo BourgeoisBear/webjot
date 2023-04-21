@@ -90,7 +90,9 @@ type ErrFunc func(err error, msg string)
 /*
 Render each document in mLayout inside its specified layout.
 */
-func (oB Builder) ApplyLayouts(mLayout Layout2Docs, mLo Layouts, fnErr ErrFunc) {
+func (oB Builder) ApplyLayouts(
+	mLayout Layout2Docs, mLo Layouts, fnErr ErrFunc,
+) {
 
 	// get total document count
 	nDocs := 0
@@ -167,11 +169,24 @@ func (oB Builder) ApplyLayouts(mLayout Layout2Docs, mLo Layouts, fnErr ErrFunc) 
 
 				// TODO: check if there are recursion issues with doc.TmplName & doCmd
 
+				// get merged vars
+				dmerged, ok := mDocs[doc.TmplName]
+				if !ok {
+					return errors.New("Doc not found")
+				}
+
+				// clone pre-merged vars
+				execVars := make(Vars, len(dmerged.Vars)+1)
+				for k, v := range dmerged.Vars {
+					execVars[k] = v
+				}
+				execVars["DOC_KEY"] = doc.TmplName
+
 				// NOTE: re-populate Funcs() on each doc to bind updated Vars
-				doc.Vars["DOC_KEY"] = doc.TmplName
 				return pLayoutTmpl.
 					Funcs(funcMap(doc.TmplName, mDocs, sDocsOrdered)).
-					Execute(fDst, doc.Vars)
+					Execute(fDst, execVars)
+
 			}(); e2 != nil {
 				fnErr(e2, doc.TmplName)
 			}

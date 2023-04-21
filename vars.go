@@ -182,7 +182,11 @@ func GetEnvGlobals() Vars {
 }
 
 func MergeVars(sv ...Vars) Vars {
-	ret := make(Vars)
+	nlen := 0
+	for ix := range sv {
+		nlen += len(sv[ix])
+	}
+	ret := make(Vars, nlen)
 	for ix := range sv {
 		for k, v := range sv[ix] {
 			ret[k] = v
