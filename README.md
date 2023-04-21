@@ -128,7 +128,7 @@ Here it is...
   </head>
   <body>
     <ul id="menu">
-      {{ range (allDocs "title") -}}
+      {{ range (docsSort (docsAll) true "title") -}}
       <li>
         <a href="/{{ .URI_PATH }}">{{ html .title }}</a>
       </li>
@@ -142,7 +142,7 @@ Here it is...
 </html>
 ```
 
-`( allDocs "title" )` is a template function.  It returns an array of variable maps&mdash;one for each document in the site.  It is sorted by the document variable(s) keyed by the remaining string parameters.  The array is left unsorted when no other parameters are given.  `allDocs` can be used to render site-wide menus, sitemaps, etc.
+`docsAll` is a template function.  It returns an array of variable maps&mdash;one for each document in the site.  It can be used to render site-wide menus, sitemaps, etc.
 
 `{{ doTmpl .DOC_KEY . }}` is where each document body will be rendered into the layout.  `.DOC_KEY` is a built-in variable.  It contains a relative path to the document source file currently being rendered.  `.` is a reference to the current document's variable map.
 
@@ -155,7 +155,8 @@ In addition to those, here are webjot's built-ins:
 
 | Function  | Description |
 | --------  | ----------- |
-| `allDocs` | Returns an array of variable maps, one for each document in the site, sorted by the document variable(s) keyed by the remaining string parameters. |
+| `docsAll` | Returns an array of variable maps, one for each document in the site. |
+| `docsSort <array> <bool> <string>...`    | Returns a sorted copy of a variable map <array>.  2nd parameter: true=sort ascending, false=sort descending.  3rd...nth parameters: keys to sort by. |
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
 | `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  `<site>/.webjot` is given highest priority in `$PATH` prior to command execution.<br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |

@@ -11,7 +11,7 @@ domain: cryptoddns.net
 	</head>
 	<body>
 		<ul id="menu">
-		{{ range (allDocs "title") -}}
+		{{ range (docsSort (docsAll) true "title") -}}
 		<li>
 			<a href="/{{ .URI_PATH }}">{{ html .title }}</a>
 		</li>

@@ -148,29 +148,34 @@ func funcMap(
 			err := postProcess(pbuf, tmplName, doc.Tmpl, data)
 			return pbuf.String(), err
 		},
-		"allDocs": func(ordKeys ...string) []Vars {
-			if len(ordKeys) == 0 {
-				return sNavDocs
-			}
+		"docsAll": func() []Vars {
 			// clone
 			ret := make([]Vars, len(sNavDocs))
 			for i := range sNavDocs {
 				ret[i] = sNavDocs[i]
 			}
-			// sort list of doc vars by document (title, URI_PATH)
-			sort.Slice(ret, func(i, j int) bool {
+			return ret
+		},
+		"docsSort": func(sVars []Vars, bAsc bool, ordKeys ...string) []Vars {
+			if len(ordKeys) == 0 {
+				return sVars
+			}
+			sort.Slice(sVars, func(i, j int) bool {
 				sT := make([]string, 2)
 				for ixStr, ixVar := range []int{i, j} {
 					for _, ordK := range ordKeys {
-						if v, ok := sNavDocs[ixVar][ordK].(string); ok {
+						if v, ok := sVars[ixVar][ordK].(string); ok {
 							sT[ixStr] = v
 							break
 						}
 					}
 				}
-				return sT[0] < sT[1]
+				if bAsc {
+					return sT[0] < sT[1]
+				}
+				return sT[0] > sT[1]
 			})
-			return ret
+			return sVars
 		},
 	}
 	return funcmap
