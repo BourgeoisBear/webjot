@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,8 +10,6 @@ import (
 	"strings"
 	tt "text/template"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 type Builder struct {
@@ -330,9 +329,6 @@ func (oB Builder) buildFile(
 ) (pdoc *Doc, dt DocType, err error) {
 
 	defer func() {
-		if err != nil {
-			err = errors.WithMessage(err, path)
-		}
 		if oB.IsShowVars && (pdoc != nil) {
 			pdoc.Vars.PrettyPrint(
 				os.Stdout, pdoc.NonConformingKeys, rxPprintExcl, oB.IsTty,
@@ -347,7 +343,7 @@ func (oB Builder) buildFile(
 	}
 
 	// compile layout
-	if filepath.HasPrefix(path, oB.ConfDir) {
+	if strings.HasPrefix(path, oB.ConfDir) {
 		ext := filepath.Ext(path)
 		switch strings.ToLower(ext) {
 		case ".html", ".htm", ".xml":

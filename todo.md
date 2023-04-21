@@ -15,7 +15,7 @@ features:
 	- test mixed delimiters
 	- SCRIPTS var
 	- raw, non-html/md, template expansion
-	- markdown option flags
+	- markdown option flags (per file, or global?)
 	- "l/r delim var options"
 
 	- ignore globals-in, YAML-encode globals-out

@@ -14,9 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"errors"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-isatty"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -38,32 +39,32 @@ func buildAll(oB Builder, srcDir string) (Layout2Docs, Layouts, error) {
 	mLayouts := make(Layouts)
 
 	// recurse through source dir
-	wdFunc := func(path string, info fs.DirEntry, eWalk error) (eout error) {
+	wdFunc := func(path string, info fs.DirEntry, eWalk error) error {
 
 		if eWalk != nil {
-			return errors.WithMessage(eWalk, path)
+			return EWrap(eWalk, path)
 		}
 
 		fname := info.Name()
+		bHidden := strings.HasPrefix(fname, ".")
 		if info.IsDir() {
 			// don't recurse hidden dirs except for ConfDir
-			if strings.HasPrefix(fname, ".") {
-				if path != oB.ConfDir {
-					return filepath.SkipDir
-				}
+			if bHidden && (path != oB.ConfDir) {
+				return filepath.SkipDir
 			}
 			// recurse into ordinary dirs
 			return nil
-		} else {
-			// skip hidden files
-			if strings.HasPrefix(fname, ".") {
-				return nil
-			}
 		}
 
+		// skip hidden files
+		if bHidden {
+			return nil
+		}
+
+		// build others
 		_, _, err := oB.buildFile(path, vinit, mL2D, mLayouts)
 		if err != nil {
-			ErrRpt(err, oB.IsTty)
+			ErrRpt(EWrap(err, path), oB.IsTty)
 		}
 		return nil
 	}
@@ -124,30 +125,24 @@ func watch(
 				return nil
 			}
 
-			// TODO: treat both Remove & Rename as deletes
-			//       (NOTE: rename is followed by a create)
-
-			if evt.Has(fsnotify.Rename) {
-				fmt.Println(evt)
-			}
-
 			// rebuild file
 			if evt.Has(fsnotify.Write) || evt.Has(fsnotify.Create) {
 
-				// skip dirs and hidden files
+				// skip paths in PubDir
+				if strings.HasPrefix(evt.Name, oB.PubDir) {
+					continue
+				}
+				// skip hidden
+				if strings.HasPrefix(filepath.Base(evt.Name), ".") {
+					continue
+				}
+				// skip dirs
 				fi, err := os.Stat(evt.Name)
 				if err != nil {
-					ErrRpt(errors.WithMessage(err, evt.Name), oB.IsTty)
+					ErrRpt(EWrap(err, evt.Name), oB.IsTty)
 					continue
 				}
 				if fi.IsDir() {
-					continue
-				} else if strings.HasPrefix(fi.Name(), ".") {
-					continue
-				}
-
-				// skip PubDir changes
-				if filepath.HasPrefix(evt.Name, oB.PubDir) {
 					continue
 				}
 
@@ -161,17 +156,18 @@ func watch(
 
 					_, _, err := oB.buildFile(evt.Name, vinit, mL2D, mLo)
 					if err != nil {
-						ErrRpt(err, oB.IsTty)
+						ErrRpt(EWrap(err, evt.Name), oB.IsTty)
 						return
 					}
 
 					// TODO: track dependency graph, only re-build dirty
 					// parse layouts, render nested templates
 					oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
-						ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
+						ErrRpt(EWrap(err, msg), oB.IsTty)
 					})
 				}()
 			}
+
 		case err, ok := <-pW.Errors:
 			ErrRpt(err, oB.IsTty)
 			if !ok {
@@ -348,7 +344,7 @@ EXAMPLES
 		return
 	}
 	oB.ApplyLayouts(mL2D, mLo, func(err error, msg string) {
-		ErrRpt(errors.WithMessage(err, msg), oB.IsTty)
+		ErrRpt(EWrap(err, msg), oB.IsTty)
 	})
 
 	if oB.IsWatchMode {

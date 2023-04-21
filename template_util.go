@@ -11,7 +11,6 @@ import (
 	tt "text/template"
 	"unicode"
 
-	"github.com/pkg/errors"
 	"github.com/yosssi/gcss"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -136,7 +135,7 @@ func funcMap(
 			// get doc
 			doc, ok := fnVars(tmplName)
 			if !ok {
-				return "", errors.Errorf("template `%s` not found", tmplName)
+				return "", fmt.Errorf("template `%s` not found", tmplName)
 			}
 			// default to doc's own vars when data == nil
 			if data == nil {

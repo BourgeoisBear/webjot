@@ -13,9 +13,28 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 )
+
+type ErrMsg struct {
+	err error
+	msg string
+}
+
+func EWrap(err error, msg string) ErrMsg {
+	return ErrMsg{err: err, msg: msg}
+}
+
+func (e ErrMsg) Error() string {
+	return fmt.Sprintf("[%s] %v", e.msg, e.err)
+}
+
+func (e ErrMsg) Unwrap() error {
+	return e.err
+}
+
+func (e ErrMsg) Message() string {
+	return e.msg
+}
 
 func ErrRpt(err error, isTty bool) {
 	if err != nil {
@@ -24,7 +43,19 @@ func ErrRpt(err error, isTty bool) {
 		} else {
 			fmt.Fprint(os.Stderr, "ERROR: ")
 		}
-		fmt.Fprintln(os.Stderr, err.Error())
+
+		if ew, ok := err.(ErrMsg); ok {
+			msg := ew.Message()
+			hd, err := os.UserHomeDir()
+			if err == nil {
+				if strings.HasPrefix(msg, hd) {
+					msg = "~" + strings.TrimPrefix(msg, hd)
+				}
+			}
+			fmt.Fprintf(os.Stderr, "[%s] %v\n", msg, ew.Unwrap())
+		} else {
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
 	}
 }
 
@@ -92,7 +123,9 @@ func searchDirAncestors(start, needle string) (found string, err error) {
 
 	defer func() {
 		if err != nil {
-			err = errors.WithMessagef(err, "search for `%s` in `%s` ancestors", needle, start)
+			err = EWrap(err,
+				fmt.Sprintf("search for `%s` in `%s` ancestors", needle, start),
+			)
 		}
 	}()
 
