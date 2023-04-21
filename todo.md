@@ -6,7 +6,6 @@ documentation:
 	- header documentation in `-help` flag
 
 features:
-	- filter by category, walk by categories
 	- recursion depth catcher
 	- YAML-parse envvars
 	- source code highlighting

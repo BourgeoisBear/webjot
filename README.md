@@ -157,6 +157,7 @@ In addition to those, here are webjot's built-ins:
 | --------  | ----------- |
 | `docsAll` | Returns an array of variable maps, one for each document in the site. |
 | `docsSort <array> <bool> <string>...`    | Returns a sorted copy of a variable map <array>.  2nd parameter: true=sort ascending, false=sort descending.  3rd...nth parameters: keys to sort by. |
+| `docsGroup <array> <key> <separator>...`    | Returns a string-indexed map of document variable maps. <key> is used to determine the string-index.  <separator> breaks the value pointed to by <key> into multiple string indices. |
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd. |
 | `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  `<site>/.webjot` is given highest priority in `$PATH` prior to command execution.<br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |

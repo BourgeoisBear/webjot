@@ -178,6 +178,20 @@ func funcMap(
 			})
 			return sVars
 		},
+		"docsGroup": func(sVars []Vars, key, sep string) map[string][]Vars {
+			ret := make(map[string][]Vars)
+			for _, v := range sVars {
+				gval, ok := v[key].(string)
+				if !ok || len(gval) == 0 {
+					continue
+				}
+				for _, grp := range strings.Split(gval, sep) {
+					grp = strings.TrimSpace(grp)
+					ret[grp] = append(ret[grp], v)
+				}
+			}
+			return ret
+		},
 		"toSlice": func(vals ...interface{}) []interface{} {
 			ret := make([]interface{}, len(vals))
 			for i := range vals {
