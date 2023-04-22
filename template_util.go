@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"gopkg.in/yaml.v3"
 )
 
 func HasUcase(s string) bool {
@@ -208,7 +210,25 @@ func funcMap(
 			}
 			return ret
 		},
-		"toTime": time.Parse,
+		"parseTime": time.Parse,
+		"parseYAML": func(txt string) (interface{}, error) {
+			var ret interface{}
+			err := yaml.Unmarshal([]byte(txt), &ret)
+			return ret, err
+		},
+		"toYAML": func(v interface{}) (string, error) {
+			bs, err := yaml.Marshal(v)
+			return string(bs), err
+		},
+		"parseJSON": func(txt string) (interface{}, error) {
+			var ret interface{}
+			err := json.Unmarshal([]byte(txt), &ret)
+			return ret, err
+		},
+		"toJSON": func(v interface{}) (string, error) {
+			bs, err := json.Marshal(v)
+			return string(bs), err
+		},
 	}
 	return funcmap
 }

@@ -69,7 +69,6 @@ begin with a number.  Any keys which do not follow this naming standard will be
 discarded.
 
 ```md
-
 title: My Markdown Document
 categories: examples, help
 author: Jason Stewart
@@ -81,26 +80,35 @@ content begins here...
 
 # {{ .title }}
 ### {{ .author }}
-
 ```
 
 For templating purposes, built-ins are always `UPPERCASE`, and user-defined
 variables are always `lowercase`.
 
 
+### Skip Rendering
+
+To create a template that can be included from other documents, but does not
+result in its own output file, set `skip: true` in its variables section.
+
+```md
+skip: true
+title: Contact
+@@@@@@@
+Contact us at test@test.com.
+```
+
 ### Delimiter Overrides
 
 Delimiters may be overridden on a per-file basis with the `ldelim` and `rdelim` header keys:
 
 ```md
-
 ldelim: <?
 rdelim: ?>
 title: Delimiter Override Example
 @@@@@@@
 # <? .title ?>
 My markdown content...
-
 ```
 
 
@@ -163,7 +171,11 @@ In addition to those, here are webjot's built-ins:
 | `md2html` | Renders markdown source in the 1st parameter to HTML. |
 | `toSlice` | Create new slice from parameters. |
 | `toMap`   | Create new map from parameters, alternating between key and value. |
-| `toTime`  | Create new time.Time value from a date/time layout & value via [time.Parse](https://pkg.go.dev/time#Parse). |
+| `parseTime`  | Create new time.Time value from a date/time layout & value via [time.Parse](https://pkg.go.dev/time#Parse). |
+| `parseJSON`  | Create new value from JSON text. |
+| `parseYAML`  | Create new value from YAML text. |
+| `toJSON`  | Encode value as JSON text. |
+| `toYAML`  | Encode value as YAML text. |
 
 
 ### Variable Precedence
