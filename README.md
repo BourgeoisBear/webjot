@@ -167,11 +167,11 @@ In addition to those, here are webjot's built-ins:
 | `docsSort <array> <bool> <string>...`    | Returns a sorted copy of a variable map <array>.  2nd parameter: true=sort ascending, false=sort descending.  3rd...nth parameters: keys to sort by. |
 | `docsGroup <array> <key> <separator>...`    | Returns a string-indexed map of document variable maps. `<key>` is used to determine the string-index.  `<separator>` breaks the value pointed to by `<key>` into multiple string indices. |
 | `doTmpl`  | Renders a template named by the 1st parameter with the vars specified in the 2nd.  The template's native variables are used when the 2nd parameter is `nil`. |
-| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.  `<site>/.webjot` is given highest priority in `$PATH` prior to command execution.<br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
-| `md2html` | Renders markdown source in the 1st parameter to HTML. |
+| `doCmd`   | Executes another program and returns the combined output of STDOUT & STDERR.<br/><br/>Unix piping and IO redirection must be wrapped inside an explicit shell invocation, like `{{ doCmd "sh" "-c" "env \| grep ^ZS_" }}`, since `doCmd` is a simple exec, not a subshell. |
+| `md2html` | Transforms markdown to HTML. |
 | `toSlice` | Create new slice from parameters. |
 | `toMap`   | Create new map from parameters, alternating between key and value. |
-| `parseTime`  | Create new time.Time value from a date/time layout & value via [time.Parse](https://pkg.go.dev/time#Parse). |
+| `parseTime`  | Create new `time.Time` value from a date/time layout & value via [time.Parse](https://pkg.go.dev/time#Parse). |
 | `parseJSON`  | Create new value from JSON text. |
 | `parseYAML`  | Create new value from YAML text. |
 | `toJSON`  | Encode value as JSON text. |

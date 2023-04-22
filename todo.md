@@ -5,6 +5,7 @@ documentation:
 	- header documentation in `-help` flag
 
 features:
+	- doCmd / $PATH interactions
 	- recursion depth catcher
 	- YAML-parse envvars
 		- ignore globals-in, YAML-encode globals-out?
